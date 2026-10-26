@@ -18,15 +18,15 @@ tools/build-innohit-55.sh
 
 Il target package è `org.csweb.tv.legacy`; il titolo visualizzato nell'app è **CloudStream Hub - INNO-Hit 55**. Il file IPK viene creato sotto `external/webos-native-app-kit/build/webos-innohit55/dist/`. La build può essere avviata anche da GitHub Actions sulla branch `arena/...`; l'artifact appare nella run CI quando i job ARMv7/webOS terminano. I job Legacy sono sperimentali e possono fallire senza bloccare i test host.
 
-### Aggiungere doGior
+### Repo doGior
 
-Dopo l'installazione, apri **Settings → Extensions → Add repository** e inserisci il manifest ufficiale:
+Nel profilo INNO-Hit l'app prova ad aggiungere automaticamente la repository doGior al primo avvio, usando il manifest ufficiale:
 
 ```text
-https://raw.githubusercontent.com/doGior/doGiorsHadEnough/builds/repo.json
+https://raw.githubusercontent.com/doGior/doGiorsHadEnough/refs/heads/builds/repo.json
 ```
 
-La repo è mantenuta da terzi, quindi non viene congelata nell'IPK: aggiungila nell'app per ottenere l'elenco aggiornato. La compatibilità va verificata per singolo plugin; WebView/UI Android, DRM, download e servizi non implementati possono non funzionare.
+Non scarica né installa plugin automaticamente. Se la repo non appare (per esempio per un errore di rete), aggiungi lo stesso URL da **Settings → Extensions → Add repository**. La repo è mantenuta da terzi e la compatibilità va verificata per ogni plugin; WebView/UI Android, DRM, download e API non implementate potrebbero non funzionare.
 
 ## Compatibilità: cosa sappiamo e cosa no
 

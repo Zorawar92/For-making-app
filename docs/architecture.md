@@ -65,14 +65,14 @@ Non promettere compatibilità generale con tutti i provider Cloudstream. In part
 Il manifest remoto da offrire nella UI (senza congelare l'elenco dei plugin nell'IPK) è:
 
 ```text
-https://raw.githubusercontent.com/doGior/doGiorsHadEnough/builds/repo.json
+https://raw.githubusercontent.com/doGior/doGiorsHadEnough/refs/heads/builds/repo.json
 ```
 
-La prima milestone dovrebbe consentire di aggiungere la repo manualmente, leggere il manifest, mostrare l'elenco e installare un plugin campione solo dopo conferma. I plugin vanno caricati dal ramo `builds` aggiornato dal mantenitore; non committare `.cs3` scaricati nel progetto.
+Nel profilo INNO-Hit il manifest viene aggiunto una volta come repository preconfigurata; nessun `.cs3` viene scaricato o installato senza conferma. Se la rete non è disponibile al primo avvio, l'utente può aggiungere lo stesso URL da Settings → Extensions. I plugin sono serviti dal ramo `builds` aggiornato dal mantenitore; non committare `.cs3` scaricati nel progetto.
 
 ## Riferimenti primari
 
 - [Waydroid README](https://github.com/waydroid/waydroid): container Android completo e requisiti Linux.
 - [CSWeb TV README](https://github.com/sostk/cloudstream-webos-native): architettura, pacchetti, limiti e guida di build.
 - [Decisione di fattibilità CSWeb TV](https://github.com/sostk/cloudstream-webos-native/blob/main/docs/FEASIBILITY_DECISION.md): esempi di plugin provati, limiti e risorse misurate.
-- [doGior manifest](https://raw.githubusercontent.com/doGior/doGiorsHadEnough/builds/repo.json).
+- [doGior manifest](https://raw.githubusercontent.com/doGior/doGiorsHadEnough/refs/heads/builds/repo.json).

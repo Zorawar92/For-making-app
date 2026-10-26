@@ -22,7 +22,7 @@ endif ()
 if (CSWEB_INNOHIT_55)
     set(CSWEB_TITLE "CloudStream Hub - INNO-Hit 55")
 endif ()
-set(CSWEB_VERSION 0.1.0 CACHE STRING "App version, three integers (the release workflow sets it)")
+set(CSWEB_VERSION 0.6.1 CACHE STRING "App version, three integers (the release workflow sets it)")
 get_filename_component(_csweb_root "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
 
 # The kit remains pinned and unmodified. Only the legacy SDL source build gets

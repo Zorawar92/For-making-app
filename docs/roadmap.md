@@ -30,7 +30,7 @@ Il profilo CMake `CSWEB_INNOHIT_55=ON` produce un singolo IPK con runtime ARMv7 
 
 ## Gate 2 — provider e playback
 
-- Aggiungere `https://raw.githubusercontent.com/doGior/doGiorsHadEnough/builds/repo.json` manualmente nell'app.
+- Verificare che il profilo aggiunga il manifest doGior al primo avvio e consenta il fallback manuale.
 - Provare i provider singolarmente: caricamento plugin, ricerca, dettagli, link e playback sono gate distinti.
 - Rendere note le limitazioni dei plugin che richiedono WebView, UI Android/AndroidX, DRM o servizi non disponibili.
 

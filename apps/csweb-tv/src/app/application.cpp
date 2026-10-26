@@ -15,6 +15,7 @@
 #include "wnk/media/ndl_backend.hpp"
 #include "wnk/platform/process.hpp"
 
+#include <algorithm>
 #include <cstdlib>
 #include <sys/stat.h>
 
@@ -37,6 +38,10 @@ void log_legacy_curl_diagnostics();
 
 namespace {
 constexpr const char *kCat = "csweb";
+#ifdef CSWEB_INNOHIT_55
+constexpr const char *kInnoHitRepository =
+    "https://raw.githubusercontent.com/doGior/doGiorsHadEnough/refs/heads/builds/repo.json";
+#endif
 
 void make_dir(const std::string &path) { ::mkdir(path.c_str(), 0700); }
 
@@ -118,7 +123,7 @@ void Application::on_start(wnk::app::Context &ctx) {
     deps.plugin_dir = plugin_dir;
     plugins_ = std::make_unique<plugins::PluginManager>(std::move(deps));
     services_.plugins = plugins_.get();
-    plugins_->on_changed = [this] { services_.plugins_changed.emit(); };
+    plugins_->on_changed = [this] { on_plugins_changed(); };
 
     plugin_data_ = std::make_unique<plugins::PluginDataStore>(ctx.store(), data_dir);
     plugin_data_->restore();
@@ -178,6 +183,25 @@ void Application::on_start(wnk::app::Context &ctx) {
         nav_->push(ui, std::make_unique<ui::SplashScreen>([this](wnk::ui::Ui &u) { router_->back(u); }));
     }
     open_link(ui, ctx.launch().params_json);
+}
+
+void Application::on_plugins_changed() {
+    services_.plugins_changed.emit();
+#ifdef CSWEB_INNOHIT_55
+    if (!plugins_ || !plugins_->started() || innohit_repo_seed_attempted_) return;
+    innohit_repo_seed_attempted_ = true;
+    const auto &repos = plugins_->repositories();
+    const bool already_added = std::any_of(repos.begin(), repos.end(), [](const plugins::RepositoryData &r) {
+        return r.url == kInnoHitRepository || r.url ==
+                   "https://raw.githubusercontent.com/doGior/doGiorsHadEnough/builds/repo.json" ||
+               r.name == "doGior's Had Enough";
+    });
+    if (already_added) return;
+    WNK_LOGI(kCat, "innohit: adding the requested doGior repository");
+    plugins_->add_repository(kInnoHitRepository, [](bool ok, const std::string &error) {
+        if (!ok) WNK_LOGW(kCat, "innohit: doGior repository was not added: %s", error.c_str());
+    });
+#endif
 }
 
 void Application::on_frame(wnk::app::Context &ctx, float dt) {

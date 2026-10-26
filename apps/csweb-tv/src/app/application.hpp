@@ -45,8 +45,10 @@ class Application : public wnk::app::Delegate {
     void open_link(wnk::ui::Ui &ui, const std::string &params_json);
     void run_pending_search(wnk::ui::Ui &ui);
     void add_repository_from_link(wnk::ui::Ui &ui, const std::string &url);
+    void on_plugins_changed();
 
     wnk::ui::Navigator *nav_ = nullptr;
+    bool innohit_repo_seed_attempted_ = false;
     std::string pending_search_;  // a cloudstreamsearch:// query waiting for the plugins to load
     bool choosing_profile_ = false;  // the start-up profile picker is open
     std::string pending_repo_;    // a repository link waiting for the stored repositories to be read

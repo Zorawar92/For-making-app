@@ -6,7 +6,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 KIT="$ROOT/external/webos-native-app-kit"
 BUILD_DIR="${CSWEB_BUILD_DIR:-$KIT/build/webos-innohit55}"
-VERSION="${CSWEB_VERSION:-0.1.0}"
+VERSION="${CSWEB_VERSION:-0.6.1}"
 JOBS="${JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}"
 
 if [[ -z "${WEBOS_NDK:-}" ]]; then
