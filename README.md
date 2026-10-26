@@ -16,7 +16,7 @@ Il percorso completo richiede Linux, Docker, il webOS NDK e tempo/spazio per com
 tools/build-innohit-55.sh
 ```
 
-Il target package è `org.csweb.tv.legacy`; il titolo visualizzato nell'app è **CloudStream Hub - INNO-Hit 55**. Il file IPK viene creato sotto `external/webos-native-app-kit/build/webos-innohit55/dist/`. La build può essere avviata anche da GitHub Actions sulla branch `arena/...`; l'artifact appare nella run CI quando i job ARMv7/webOS terminano. I job Legacy sono sperimentali e possono fallire senza bloccare i test host.
+Il target package è `org.csweb.tv.legacy` versione candidata **0.6.1**; il titolo visualizzato nell'app è **CloudStream Hub - INNO-Hit 55**. Il file IPK viene creato sotto `external/webos-native-app-kit/build/webos-innohit55/dist/`. La CI prova anche il caricamento di una revisione fissata del plugin AnimeUnity di doGior nel runtime ARMv7 su host ARM: è un test del runtime, non della TV, e non garantisce la compatibilità di tutti i plugin. I job Legacy possono fallire senza bloccare i test host.
 
 ### Repo doGior
 

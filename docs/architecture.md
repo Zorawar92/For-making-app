@@ -36,7 +36,7 @@ Non si assume invece di poter portare su webOS l'intero container Waydroid, il s
 ```text
 IPK webOS
 ├── UI nativa TV (telecomando, catalogo, ricerca, dettagli)
-├── gestore repository/plugin (.cs3), con doGior come repo opt-in
+├── gestore repository/plugin (.cs3), con doGior preconfigurata nel profilo target
 ├── client IPC locale con timeout, limiti messaggi e log senza token
 ├── player webOS e adattatore link/sottotitoli
 └── runtime helper locale

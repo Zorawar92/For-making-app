@@ -418,6 +418,10 @@ jobs:
             https://raw.githubusercontent.com/NivinCNC/CNCVerse-Cloud-Stream-Extension/947a28fefc8fb79c2067323a5701b7c2d4e5cfa8/BilibiliProvider.cs3
           curl -fSL --retry 3 -o /tmp/legacy-repro/plugins/NguonC.cs3 \
             https://raw.githubusercontent.com/h0dev/0cs3/1db6f185b9bab8627d83df22a087c661efe7a5d8/NguonC.cs3
+          # One pinned doGior provider validates this repo's actual extension format/runtime path.
+          curl -fSL --retry 3 -o /tmp/legacy-repro/plugins/AnimeUnity.cs3 \
+            https://raw.githubusercontent.com/doGior/doGiorsHadEnough/ce3e8e4eee533a6b03ccd17426edadf5ac88bc06/AnimeUnity.cs3
+          echo '2c744e7d10b243353aceae61d335a3dd03b607c7acc69a91496d852c17d6e9ac  /tmp/legacy-repro/plugins/AnimeUnity.cs3' | sha256sum -c -
           sha256sum /tmp/legacy-repro/plugins/*.cs3 > /tmp/legacy-repro/logs/plugin-sha256.txt
           uname -a > /tmp/legacy-repro/logs/host-kernel.txt
           sha256sum runtime-armv7.tar > /tmp/legacy-repro/logs/runtime-sha256.txt
@@ -431,7 +435,7 @@ jobs:
             -v /tmp/legacy-repro/logs:/logs \
             -v "$GITHUB_WORKSPACE/tools/test-legacy-runtime.py":/test.py:ro \
             csweb-legacy-test python3 /test.py --runtime /runtime --output /logs --probes \
-            /plugins/BilibiliProvider.cs3 /plugins/NguonC.cs3
+            /plugins/BilibiliProvider.cs3 /plugins/NguonC.cs3 /plugins/AnimeUnity.cs3
 
       - name: Keep plugin-load results and progress logs
         if: always()
