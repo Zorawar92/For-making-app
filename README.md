@@ -32,7 +32,8 @@ La repo è mantenuta da terzi, quindi non viene congelata nell'IPK: aggiungila n
 
 - **Modello confermato:** INNO-Hit IH55UWB; firmware 04.56.35; il menu TV riporta webOS Hub 7.5.8.
 - **Altro modello target:** IH55UWB4, non ancora confermato dall'utente e non testato.
-- **Verifica su INNO-Hit:** non ancora eseguita. L'IPK che supera `check-package` non equivale a una prova sulla TV.
+- **Osservazione riportata dall'utente:** CSWeb TV 0.6.0 si avvia su IH55UWB, ma i plugin non funzionano. Non sono ancora noti variante IPK, plugin provato, stadio del guasto o log.
+- **Verifica del nostro profilo INNO-Hit:** non ancora eseguita. L'IPK che supera `check-package` non equivale a una prova sulla TV.
 - La variante ARMv7 è un profilo prudenziale, non una conclusione ricavata dal numero di versione. Kernel ABI, API webOS Hub, librerie grafiche/media e policy d'installazione vanno verificati sulla TV.
 
 Dopo l'installazione raccogli log e risultati per **entrambe** le sigle, se possibile. Segui la matrice in [docs/roadmap.md](docs/roadmap.md) e la guida upstream [compatibilità](docs/compatibility.md).
