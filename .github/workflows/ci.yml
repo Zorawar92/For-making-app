@@ -1,0 +1,443 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Builds and tests the apps on every pull request and on every push to main (a merged pull request).
+#   host:  kit + apps built for Linux (host-debug and host-asan), all tests (kit, apps, project tools)
+#   runtime: the plugin runtime (runtime-aarch64) from the pinned inputs (tools/build-runtime.sh),
+#            cached until runtime/ or its inputs change
+#   webos: the full TV package (org.csweb.tv ipk with that runtime), checked by the kit's check-package
+#   runtime-legacy, webos-legacy: the legacy package for TVs with a 32-bit kernel (org.csweb.tv.legacy:
+#            runtime-armv7 and a bundled libcurl, docs/legacy-build.md). Separate jobs, caches and artifacts;
+#            allowed to fail, so they never hold back the jobs above.
+# The kit is checked out at the commit tools/fetch-kit.sh pins. Main build tests use this project's
+# own fixtures. The isolated legacy-runtime-test job additionally loads fixed third-party revisions.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, 'arena/**']
+  workflow_dispatch:
+  # release.yml runs the same build and tests with its version.
+  workflow_call:
+    inputs:
+      version:
+        description: App version for the package (x.y.z); empty keeps the one in apps/csweb-tv/CMakeLists.txt
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  KIT: external/webos-native-app-kit
+
+jobs:
+  host:
+    name: Host (${{ matrix.preset }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        preset: [host-debug, host-asan]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends \
+            cmake g++ make pkg-config python3 git curl xz-utils \
+            libsdl2-dev libgles-dev libegl-dev libegl-mesa0 libgl1-mesa-dri libcurl4 openssl \
+            ffmpeg  # the kit's media and player tests generate their clips with the ffmpeg CLI
+
+      - name: Check out the kit at the pinned commit
+        run: tools/fetch-kit.sh
+
+      - name: Cache the bundled FFmpeg
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.KIT }}/build/${{ matrix.preset }}/ffmpeg
+          key: ffmpeg-${{ matrix.preset }}-${{ hashFiles('tools/fetch-kit.sh') }}
+
+      - name: Configure
+        working-directory: ${{ env.KIT }}
+        run: |
+          cmake --preset ${{ matrix.preset }} \
+            -DWNK_EXTRA_APP_DIRS="$GITHUB_WORKSPACE/apps/runtime-probe;$GITHUB_WORKSPACE/apps/csweb-tv"
+
+      - name: Build
+        working-directory: ${{ env.KIT }}
+        run: cmake --build --preset ${{ matrix.preset }} -j"$(nproc)"
+
+      - name: Test (kit and apps)
+        if: matrix.preset != 'host-asan'
+        working-directory: ${{ env.KIT }}
+        run: ctest --preset ${{ matrix.preset }} -j"$(nproc)"
+
+      # The runners have no GPU: Mesa's llvmpipe compiles shaders to machine code at run time, and
+      # its allocations from that code reach LeakSanitizer with no module name, so the kit's
+      # suppressions (tests/lsan-host.supp, by module) cannot match them. The tests that open a GL
+      # context run with leak detection off; AddressSanitizer and UBSan still check them. Every
+      # other test keeps leak detection. The kit's GL runs drive its example apps by timed key scripts,
+      # and under ASan with software rendering tvui gamepad_navigates has missed its timing; they get
+      # up to two retries. A test that really fails still fails; the app's own tests run once.
+      - name: Test (kit and apps, ASan)
+        if: matrix.preset == 'host-asan'
+        working-directory: ${{ env.KIT }}
+        run: |
+          GL='^(integration\.renderer_gl|e2e\..*)$'
+          ctest --preset host-asan -j"$(nproc)" -E "$GL"
+          ASAN_OPTIONS=detect_leaks=0 ctest --preset host-asan -j"$(nproc)" -R "$GL" --repeat until-pass:3
+
+      - name: Test (project tools)
+        if: matrix.preset == 'host-debug'
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Keep test logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-${{ matrix.preset }}
+          path: ${{ env.KIT }}/build/${{ matrix.preset }}/Testing/Temporary/
+          retention-days: 7
+
+  runtime:
+    name: Plugin runtime (aarch64)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      # Computed before the build: afterwards runtime/ holds the build's root-owned output, which
+      # hashFiles cannot read when the cache step evaluates its key again to save.
+      - name: Runtime cache key
+        id: runtime-key
+        run: echo "key=runtime-aarch64-${{ hashFiles('runtime/**', 'tools/build-runtime.sh', 'tools/fetch-runtime-inputs.sh', 'test-plugins/conformance/**') }}" >> "$GITHUB_OUTPUT"
+
+      - name: Cache the runtime
+        id: runtime-cache
+        uses: actions/cache@v4
+        with:
+          path: runtime-aarch64.tar
+          key: ${{ steps.runtime-key.outputs.key }}
+
+      - name: Cache the pinned inputs
+        if: steps.runtime-cache.outputs.cache-hit != 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/csweb-runtime-inputs
+          key: runtime-inputs-${{ hashFiles('runtime/inputs.lock') }}
+
+      - name: Build the runtime from the pinned inputs
+        if: steps.runtime-cache.outputs.cache-hit != 'true'
+        run: |
+          tools/build-runtime.sh
+          tar -C runtime/dist -cf runtime-aarch64.tar runtime-aarch64
+
+      - name: Keep the runtime for the package
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-aarch64
+          path: runtime-aarch64.tar
+          retention-days: 3
+
+  webos:
+    name: webOS package
+    needs: runtime
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends cmake make pkg-config python3 git curl xz-utils
+
+      - name: Check out the kit at the pinned commit
+        run: tools/fetch-kit.sh
+
+      - uses: ./.github/actions/webos-ndk
+
+      - name: Get the plugin runtime
+        uses: actions/download-artifact@v4
+        with:
+          name: runtime-aarch64
+
+      - name: Put the runtime in place
+        run: |
+          mkdir -p runtime/dist
+          tar -C runtime/dist -xf runtime-aarch64.tar
+          test -f runtime/dist/runtime-aarch64/lib/ld-musl-aarch64.so.1
+
+      - name: Cache the bundled FFmpeg
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.KIT }}/build/webos-release/ffmpeg
+          key: ffmpeg-webos-release-${{ hashFiles('tools/fetch-kit.sh', '.github/actions/webos-ndk/action.yml') }}
+
+      - name: Configure
+        working-directory: ${{ env.KIT }}
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          cmake --preset webos-release \
+            -DWNK_EXTRA_APP_DIRS="$GITHUB_WORKSPACE/apps/runtime-probe;$GITHUB_WORKSPACE/apps/csweb-tv" \
+            ${VERSION:+-DCSWEB_VERSION="$VERSION"}
+
+      - name: Build and check the package
+        working-directory: ${{ env.KIT }}
+        run: cmake --build --preset webos-release -j"$(nproc)" --target csweb-tv-ipk
+
+      - name: Upload the package
+        uses: actions/upload-artifact@v4
+        with:
+          name: org.csweb.tv-ipk
+          path: ${{ env.KIT }}/build/webos-release/dist/org.csweb.tv_*_arm.ipk
+          retention-days: 14
+
+  # ---- legacy package (docs/legacy-build.md): nothing above depends on these jobs -------------------------
+  art-legacy:
+    name: ART package (armv7, native ARM)
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 120
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify native armv7 execution and compute ART cache key
+        id: art-key
+        run: |
+          if test -e /proc/sys/fs/binfmt_misc/qemu-arm; then
+            echo "::error::qemu-arm is registered; this job requires native armv7 execution"
+            exit 1
+          fi
+          docker pull --platform linux/arm/v7 alpine:edge
+          docker run --rm --platform linux/arm/v7 alpine:edge sh -ec '
+            test "$(apk --print-arch)" = armv7
+            test "$(getconf LONG_BIT)" = 32
+            echo "Native armv7 userspace works"
+          '
+          IMAGE_ID=$(docker image inspect alpine:edge --format '{{.Id}}')
+          docker run --rm --platform linux/arm/v7 alpine:edge sh -ec '
+            printf "%s\n" https://dl-cdn.alpinelinux.org/alpine/edge/main \
+              https://dl-cdn.alpinelinux.org/alpine/edge/community \
+              https://dl-cdn.alpinelinux.org/alpine/edge/testing > /etc/apk/repositories
+            apk update >&2
+            apk policy gcc musl-dev binutils openjdk8-jdk wolfssl-jni-dev
+          ' > /tmp/art-toolchain
+          TOOLCHAIN=$(sha256sum /tmp/art-toolchain | cut -d' ' -f1)
+          echo "key=art-armv7-native-v1-${{ hashFiles('runtime/build-art-armv7.sh') }}-${IMAGE_ID#sha256:}-$TOOLCHAIN" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the ART package
+        id: art-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: runtime/native/out/art-armv7
+          key: ${{ steps.art-key.outputs.key }}
+
+      - name: Build ART natively for armv7
+        if: steps.art-cache.outputs.cache-hit != 'true'
+        run: |
+          docker run --rm --platform linux/arm/v7 -v "$GITHUB_WORKSPACE":/p \
+            alpine:edge sh /p/runtime/build-art-armv7.sh
+
+      # Save immediately: a failure in the later runtime job must not discard a successful ART build.
+      - name: Cache the verified ART package
+        if: steps.art-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: runtime/native/out/art-armv7
+          key: ${{ steps.art-key.outputs.key }}
+
+      - name: Keep the ART package and provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: art-armv7
+          path: runtime/native/out/art-armv7/
+          if-no-files-found: error
+          retention-days: 14
+
+  runtime-legacy:
+    name: Plugin runtime (armv7, legacy)
+    needs: art-legacy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Runtime cache key
+        id: runtime-key
+        run: echo "key=runtime-armv7-${{ hashFiles('runtime/**', 'tools/build-runtime.sh', 'tools/fetch-runtime-inputs.sh', 'tools/instrument-legacy-loader.py', 'test-plugins/conformance/**') }}" >> "$GITHUB_OUTPUT"
+
+      - name: Cache the runtime
+        id: runtime-cache
+        uses: actions/cache@v4
+        with:
+          path: runtime-armv7.tar
+          key: ${{ steps.runtime-key.outputs.key }}
+
+      - name: Cache the pinned inputs
+        if: steps.runtime-cache.outputs.cache-hit != 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/csweb-runtime-inputs
+          key: runtime-inputs-legacy-${{ hashFiles('runtime/inputs.lock', 'runtime/inputs-armv7.lock') }}
+
+      - name: Get the native ART package
+        if: steps.runtime-cache.outputs.cache-hit != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: art-armv7
+          path: runtime/native/out/art-armv7
+
+      # Unpinned (Alpine edge) until runtime/inputs-armv7.lock exists; build-runtime.sh says so in the log.
+      - name: Build the runtime
+        if: steps.runtime-cache.outputs.cache-hit != 'true'
+        run: |
+          CSWEB_ARMV7_ART_DIR="$GITHUB_WORKSPACE/runtime/native/out/art-armv7" \
+            tools/build-runtime.sh --arch armv7
+          tar -C runtime/dist -cf runtime-armv7.tar runtime-armv7
+
+      - name: Keep the runtime for the package
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-armv7
+          path: runtime-armv7.tar
+          retention-days: 3
+
+  webos-legacy:
+    name: webOS package (legacy)
+    needs: runtime-legacy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends cmake make pkg-config python3 git curl xz-utils
+
+      - name: Check out the kit at the pinned commit
+        run: tools/fetch-kit.sh
+
+      - uses: ./.github/actions/webos-ndk
+
+      - name: Get the plugin runtime
+        uses: actions/download-artifact@v4
+        with:
+          name: runtime-armv7
+
+      - name: Put the runtime in place
+        run: |
+          mkdir -p runtime/dist
+          tar -C runtime/dist -xf runtime-armv7.tar
+          test -f runtime/dist/runtime-armv7/lib/ld-musl-armhf.so.1
+          test -f runtime/dist/runtime-armv7/trust/ca-bundle.pem
+
+      - name: Cache the bundled FFmpeg
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.KIT }}/build/webos-legacy/ffmpeg
+          key: ffmpeg-webos-release-${{ hashFiles('tools/fetch-kit.sh', '.github/actions/webos-ndk/action.yml') }}
+
+      - name: Cache the bundled libcurl sources
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/wnk/libcurl
+          key: libcurl-sources-${{ hashFiles('tools/build-libcurl-webos.sh') }}
+
+      - name: Configure
+        working-directory: ${{ env.KIT }}
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          cmake --preset webos-release -B build/webos-legacy \
+            -DWNK_EXTRA_APP_DIRS="$GITHUB_WORKSPACE/apps/csweb-tv" -DCSWEB_INNOHIT_55=ON \
+            ${VERSION:+-DCSWEB_VERSION="$VERSION"}
+
+      - name: Build and check the package
+        working-directory: ${{ env.KIT }}
+        run: cmake --build build/webos-legacy -j"$(nproc)" --target csweb-tv-ipk
+
+      - name: Upload the package
+        uses: actions/upload-artifact@v4
+        with:
+          name: innohit-55-webos-hub-ipk
+          path: ${{ env.KIT }}/build/webos-legacy/dist/org.csweb.tv.legacy_*_arm.ipk
+          retention-days: 14
+
+  legacy-runtime-test:
+    name: Plugin load test (armv7, native ARM)
+    needs: runtime-legacy
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Get the packaged legacy runtime
+        uses: actions/download-artifact@v4
+        with:
+          name: runtime-armv7
+
+      - name: Prepare native ARMv7 test container
+        run: |
+          test ! -e /proc/sys/fs/binfmt_misc/qemu-arm
+          mkdir -p /tmp/legacy-repro/runtime /tmp/legacy-repro/plugins /tmp/legacy-repro/logs
+          tar -C /tmp/legacy-repro/runtime -xf runtime-armv7.tar
+          docker build --platform linux/arm/v7 --build-arg TEST_UID="$(id -u)" \
+            --build-arg TEST_GID="$(id -g)" -t csweb-legacy-test - <<'DOCKERFILE'
+          FROM alpine:edge
+          ARG TEST_UID
+          ARG TEST_GID
+          RUN apk add --no-cache python3 && \
+              addgroup -g "$TEST_GID" cswebtest && \
+              adduser -D -H -u "$TEST_UID" -G cswebtest cswebtest
+          DOCKERFILE
+          docker run --rm --platform linux/arm/v7 csweb-legacy-test sh -ec '
+            test "$(apk --print-arch)" = armv7
+            test "$(getconf LONG_BIT)" = 32
+          '
+          docker run --rm --platform linux/arm/v7 --user "$(id -u):$(id -g)" \
+            csweb-legacy-test python3 -c 'import os, pwd; print(pwd.getpwuid(os.getuid()).pw_name)'
+
+      - name: Fetch fixed plugin revisions and record provenance
+        run: |
+          curl -fSL --retry 3 -o /tmp/legacy-repro/plugins/BilibiliProvider.cs3 \
+            https://raw.githubusercontent.com/NivinCNC/CNCVerse-Cloud-Stream-Extension/947a28fefc8fb79c2067323a5701b7c2d4e5cfa8/BilibiliProvider.cs3
+          curl -fSL --retry 3 -o /tmp/legacy-repro/plugins/NguonC.cs3 \
+            https://raw.githubusercontent.com/h0dev/0cs3/1db6f185b9bab8627d83df22a087c661efe7a5d8/NguonC.cs3
+          sha256sum /tmp/legacy-repro/plugins/*.cs3 > /tmp/legacy-repro/logs/plugin-sha256.txt
+          uname -a > /tmp/legacy-repro/logs/host-kernel.txt
+          sha256sum runtime-armv7.tar > /tmp/legacy-repro/logs/runtime-sha256.txt
+
+      - name: Load unmodified plugins in the ARMv7 runtime
+        run: |
+          docker run --rm --platform linux/arm/v7 --network none --user "$(id -u):$(id -g)" --cap-drop ALL \
+            --security-opt no-new-privileges --pids-limit 256 --memory 1g \
+            -v /tmp/legacy-repro/runtime/runtime-armv7:/runtime:ro \
+            -v /tmp/legacy-repro/plugins:/plugins:ro \
+            -v /tmp/legacy-repro/logs:/logs \
+            -v "$GITHUB_WORKSPACE/tools/test-legacy-runtime.py":/test.py:ro \
+            csweb-legacy-test python3 /test.py --runtime /runtime --output /logs --probes \
+            /plugins/BilibiliProvider.cs3 /plugins/NguonC.cs3
+
+      - name: Keep plugin-load results and progress logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: legacy-runtime-load-test
+          path: /tmp/legacy-repro/logs/
+          if-no-files-found: warn
+          retention-days: 14

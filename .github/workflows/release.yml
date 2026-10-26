@@ -1,0 +1,204 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Release build, started by hand (Actions > Release > Run workflow) with the version to give the app.
+#   1. checks the version (three integers, as webOS requires) and that tag v<version> is new
+#   2. runs the whole CI (ci.yml) on this commit with that version: host tests, plugin runtime from
+#      the pinned inputs, full TV package checked by check-package
+#   3. creates the GitHub release v<version> on this commit with the package, its SHA-256 and the
+#      Homebrew Channel manifest (org.csweb.tv.manifest.json); a full release is marked latest
+# Releases are made from main only. CI builds and checks the package; it does not run it on a TV.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: App version, three integers (x.y.z), e.g. 0.2.0
+        required: true
+        type: string
+      prerelease:
+        description: Mark the release as a pre-release
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check the version
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version, tag and branch
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if ! [[ "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::version '$VERSION' must be three integers, e.g. 0.2.0 (webOS requirement)"
+            exit 1
+          fi
+          if [[ "$GITHUB_REF" != refs/heads/main ]]; then
+            echo "::error::releases are made from main (this run is on $GITHUB_REF)"
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null; then
+            echo "::error::tag v$VERSION already exists"
+            exit 1
+          fi
+          echo "Releasing v$VERSION from $GITHUB_SHA"
+
+  build:
+    name: Build and test
+    needs: check
+    uses: ./.github/workflows/ci.yml
+    with:
+      version: ${{ inputs.version }}
+
+  release:
+    name: Publish the release
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ inputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get the package
+        uses: actions/download-artifact@v4
+        with:
+          name: org.csweb.tv-ipk
+          path: dist
+
+      - name: Check the package
+        run: |
+          ipk="dist/org.csweb.tv_${VERSION}_arm.ipk"
+          test -f "$ipk" || { ls -l dist; echo "::error::$ipk not built"; exit 1; }
+          (cd dist && sha256sum "$(basename "$ipk")" > SHA256SUMS && cat SHA256SUMS)
+
+      # The manifest the Homebrew Channel reads (format of webosbrew-gen-manifest); a listing points at
+      # .../releases/latest/download/org.csweb.tv.manifest.json, so full releases are marked latest.
+      - name: Homebrew Channel manifest
+        run: |
+          python3 - "$VERSION" <<'EOF'
+          import hashlib, json, os, sys
+          version = sys.argv[1]
+          ipk = f"org.csweb.tv_{version}_arm.ipk"
+          repo, sha = os.environ["GITHUB_REPOSITORY"], os.environ["GITHUB_SHA"]
+          manifest = {
+              "id": "org.csweb.tv",
+              "version": version,
+              "type": "native",
+              "title": "CSWeb TV",
+              "appDescription": "Runs CloudStream extensions natively on the TV. Ships no content or plugins.",
+              "iconUri": f"https://raw.githubusercontent.com/{repo}/{sha}/apps/csweb-tv/packaging/icons/largeIcon.png",
+              "sourceUrl": f"https://github.com/{repo}",
+              "rootRequired": False,
+              "ipkUrl": ipk,
+              "ipkHash": {"sha256": hashlib.sha256(open(f"dist/{ipk}", "rb").read()).hexdigest()},
+          }
+          with open("dist/org.csweb.tv.manifest.json", "w") as f:
+              json.dump(manifest, f)
+          print(json.dumps(manifest, indent=1))
+          EOF
+
+      # Legacy package (docs/legacy-build.md), optional: published only when CI built it and its runtime
+      # has licence notices (runtime/licenses-armv7/); otherwise the release is exactly the main package.
+      - name: Get the legacy package
+        id: legacy-ipk
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: org.csweb.tv.legacy-ipk
+          path: dist-legacy
+
+      - name: Legacy package and its manifest
+        id: legacy
+        run: |
+          ipk="dist-legacy/org.csweb.tv.legacy_${VERSION}_arm.ipk"
+          if [[ ! -f "$ipk" ]]; then echo "No legacy package built; publishing the main package only"; exit 0; fi
+          if [[ ! -f runtime/licenses-armv7/packages.tsv ]]; then
+            echo "::warning::legacy package built but runtime/licenses-armv7/ is missing; not publishing it"; exit 0
+          fi
+          (cd dist-legacy && sha256sum "$(basename "$ipk")" > SHA256SUMS-legacy && cat SHA256SUMS-legacy)
+          python3 - "$VERSION" <<'EOF'
+          import hashlib, json, os, sys
+          version = sys.argv[1]
+          ipk = f"org.csweb.tv.legacy_{version}_arm.ipk"
+          repo, sha = os.environ["GITHUB_REPOSITORY"], os.environ["GITHUB_SHA"]
+          manifest = {
+              "id": "org.csweb.tv.legacy",
+              "version": version,
+              "type": "native",
+              "title": "CSWeb TV Legacy",
+              "appDescription": "CSWeb TV for older LG TVs with a 32-bit kernel (webOS 4.x and similar). "
+                                "Runs CloudStream extensions natively. Ships no content or plugins.",
+              "iconUri": f"https://raw.githubusercontent.com/{repo}/{sha}/apps/csweb-tv/packaging/icons/largeIcon.png",
+              "sourceUrl": f"https://github.com/{repo}",
+              "rootRequired": False,
+              "ipkUrl": ipk,
+              "ipkHash": {"sha256": hashlib.sha256(open(f"dist-legacy/{ipk}", "rb").read()).hexdigest()},
+          }
+          with open("dist-legacy/org.csweb.tv.legacy.manifest.json", "w") as f:
+              json.dump(manifest, f)
+          print(json.dumps(manifest, indent=1))
+          EOF
+          echo "files=$ipk dist-legacy/org.csweb.tv.legacy.manifest.json dist-legacy/SHA256SUMS-legacy" >> "$GITHUB_OUTPUT"
+
+      - name: Release notes
+        env:
+          LEGACY_FILES: ${{ steps.legacy.outputs.files }}
+        run: |
+          kit=$(tools/fetch-kit.sh --print)
+          inputs=$(sed -n 's#^\# mirror: .*/download/##p' runtime/inputs.lock)
+          sha=$(cut -d' ' -f1 dist/SHA256SUMS)
+          cat > notes.md <<EOF
+          CSWeb TV $VERSION for LG webOS TVs (ARM), built by CI from commit \`$GITHUB_SHA\`.
+
+          **Install:** \`org.csweb.tv_${VERSION}_arm.ipk\` with Developer Mode (\`ares-install\`) or the kit's \`tools/install.sh\`.
+          SHA-256: \`$sha\`
+
+          The app ships no plugins and no content: it runs CloudStream extensions from repositories you add.
+
+          **Built with**
+          - Native App Kit \`$kit\`
+          - Plugin runtime from the pinned inputs in \`runtime/inputs.lock\` (release [$inputs](https://github.com/$GITHUB_REPOSITORY/releases/tag/$inputs), which also holds the sources of what the runtime ships)
+          - CloudStream pre-release \`eb962b4\`
+
+          **Checked by CI:** host tests (debug and ASan), the plugin runtime build and its licence notices, and the kit's package check. It is not run on a TV by CI.
+
+          **Licences:** GPL-3.0-or-later. The package carries \`licenses/\` (app and kit) and \`runtime-aarch64/licenses/\` (runtime). Source: this repository at this tag, and the release above for the runtime's parts.
+          EOF
+          if [[ -n "$LEGACY_FILES" ]]; then
+            legacy_sha=$(cut -d' ' -f1 dist-legacy/SHA256SUMS-legacy)
+            {
+              echo
+              echo "**Legacy package (older TVs with a 32-bit kernel, e.g. webOS 4.x):** \`org.csweb.tv.legacy_${VERSION}_arm.ipk\`, SHA-256 \`$legacy_sha\`."
+              echo "Install it only if the main package's log shows \`runtime: exited (code 127)\` or \`no HTTP transport\`."
+              echo "It carries an armv7 plugin runtime (\`runtime-armv7/licenses/\`) and its own libcurl (\`licenses-libcurl/\`); see \`docs/legacy-build.md\`."
+            } >> notes.md
+          fi
+          cat notes.md
+
+      - name: Create the release
+        env:
+          PRERELEASE: ${{ inputs.prerelease }}
+          LEGACY_FILES: ${{ steps.legacy.outputs.files }}
+        run: |
+          # Only full releases become "latest" (what the Homebrew Channel listing follows); the
+          # runtime-inputs-N releases are pre-releases and never are.
+          flags=(--latest)
+          if [[ "$PRERELEASE" == true ]]; then flags=(--prerelease --latest=false); fi
+          gh release create "v$VERSION" "${flags[@]}" \
+            --target "$GITHUB_SHA" \
+            --title "CSWeb TV $VERSION" \
+            --notes-file notes.md \
+            "dist/org.csweb.tv_${VERSION}_arm.ipk" dist/org.csweb.tv.manifest.json dist/SHA256SUMS \
+            $LEGACY_FILES  # empty unless the legacy package is published (word-split on purpose)
