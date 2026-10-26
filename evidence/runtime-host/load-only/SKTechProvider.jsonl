@@ -1,0 +1,18 @@
+{"event":"plugin","name":"SKTechProvider","version":58,"class":"com.cncverse.SKTechPlugin","base":"Plugin","requiresResources":true,"sha256":"f7605368aff29d108c0975d23bddf4f98b3d6dae0662c5db3f5be0c76ab9150d"}
+{"event":"unsupported","api":"Plugin.resources (requiresResources)","stage":"load"}
+SKTech: Fetched encrypted categories data: 39936 chars
+[ERROR] Legacy decryption failed: pad block corrupted
+[ERROR] Legacy decryption failed: bad base-64
+[ERROR] Legacy decryption failed: pad block corrupted
+SKLiveCrypto: ✓ decryptFallbackB succeeded (22373 chars)
+SKTech: Decrypted categories successfully: 22373 chars
+{"event":"compat","context":"headless-activity","type":"androidx.appcompat.app.AppCompatActivity","reason":"load(Context) casts its context to an Activity"}
+SKTech: Fetched encrypted categories data: 39936 chars
+[ERROR] Legacy decryption failed: pad block corrupted
+[ERROR] Legacy decryption failed: bad base-64
+[ERROR] Legacy decryption failed: pad block corrupted
+SKLiveCrypto: ✓ decryptFallbackB succeeded (22373 chars)
+SKTech: Decrypted categories successfully: 22373 chars
+{"event":"unsupported","api":"Plugin.openSettings (Android settings screen)","stage":"load"}
+{"event":"provider","name":"⚡SKTech Live Events","mainUrl":"https://welalagaa.site","lang":"ta","hasMainPage":true,"hasQuickSearch":false,"supportedTypes":"[Live]"}
+{"event":"done","ok":true,"elapsed_ms":1681}

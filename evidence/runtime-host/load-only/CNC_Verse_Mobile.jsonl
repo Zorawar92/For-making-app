@@ -1,0 +1,12 @@
+{"event":"plugin","name":"CNC Verse Mobile","version":11,"class":"com.horis.cncverse.CNCVersePlugin","base":"Plugin","requiresResources":true,"sha256":"356a0faa2ca6ada4dc112093dfab893c89ea3fa2f4c5ca777d1e77dc125c7a04"}
+{"event":"unsupported","api":"Plugin.resources (requiresResources)","stage":"load"}
+{"event":"compat","context":"headless-activity","type":"androidx.appcompat.app.AppCompatActivity","reason":"load(Context) casts its context to an Activity"}
+{"event":"unsupported","api":"Plugin.openSettings (Android settings screen)","stage":"load"}
+{"event":"provider","name":"NetflixM","mainUrl":"https://net52.cc","lang":"ta","hasMainPage":true,"hasQuickSearch":false,"supportedTypes":"[Movie, TvSeries, Anime, AsianDrama]"}
+{"event":"provider","name":"PrimeVideoM","mainUrl":"https://net52.cc","lang":"ta","hasMainPage":true,"hasQuickSearch":false,"supportedTypes":"[Movie, TvSeries, Anime, AsianDrama]"}
+{"event":"provider","name":"HotstarM","mainUrl":"https://net52.cc","lang":"ta","hasMainPage":true,"hasQuickSearch":false,"supportedTypes":"[Movie, TvSeries, Anime, AsianDrama]"}
+{"event":"provider","name":"DisneyM","mainUrl":"https://net52.cc","lang":"ta","hasMainPage":true,"hasQuickSearch":false,"supportedTypes":"[Movie, TvSeries, Anime, AsianDrama]"}
+{"event":"provider","name":"MarvelM","mainUrl":"https://net52.cc","lang":"ta","hasMainPage":true,"hasQuickSearch":false,"supportedTypes":"[Movie, TvSeries, Anime, AsianDrama]"}
+{"event":"provider","name":"Star WarsM","mainUrl":"https://net52.cc","lang":"ta","hasMainPage":true,"hasQuickSearch":false,"supportedTypes":"[Movie, TvSeries, Anime, AsianDrama]"}
+{"event":"provider","name":"PixarM","mainUrl":"https://net52.cc","lang":"ta","hasMainPage":true,"hasQuickSearch":false,"supportedTypes":"[Movie, TvSeries, Anime, AsianDrama]"}
+{"event":"done","ok":true,"elapsed_ms":146}

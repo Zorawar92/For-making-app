@@ -1,0 +1,368 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// CloudStream webOS feasibility probe (NOT a CloudStream-compatible app, and runs no plugin code).
+// Answers the platform questions an on-device Android runtime depends on: may the jailed app start a
+// second process from its own directory and from tmpfs, may that process run a 64-bit binary, map
+// code executable (AOT files, JIT), get entropy, threads and network? Results go to events.log
+// (tools/logs.sh) and to the screen.
+#include <fcntl.h>
+#include <poll.h>
+#include <signal.h>
+#include <sys/resource.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+#include <chrono>
+#include <cstring>
+#include <fstream>
+#include <memory>
+#include <sstream>
+#include <string>
+#include <vector>
+
+#include <nlohmann/json.hpp>
+
+#include "child_probe.hpp"
+#include "wnk/app/app.hpp"
+#include "wnk/async/async.hpp"
+#include "wnk/log.hpp"
+#include "wnk/ui/forms.hpp"
+#include "wnk/ui/navigation.hpp"
+#include "wnk/ui/widgets.hpp"
+
+namespace {
+
+constexpr const char *kCat = "csprobe";
+constexpr const char *kChildFlag = "--child-probe";
+constexpr int kChildTimeoutMs = 30000;
+constexpr int kRuntimeTimeoutMs = 240000;  // an imageless ART start interprets the whole class path
+#if defined(__arm__) || defined(__aarch64__)
+constexpr const char *kRuntimeDir = "runtime-aarch64";
+constexpr const char *kLoader = "ld-musl-aarch64.so.1";
+#else
+constexpr const char *kRuntimeDir = "runtime-x86_64";
+constexpr const char *kLoader = "ld-musl-x86_64.so.1";
+#endif
+
+struct RunResult {
+    std::string label;
+    std::string status;  // "exit N", "signal N", "exec failed: ...", "timeout"
+    std::vector<std::string> lines;
+    long wall_ms = 0;
+    long maxrss_kb = 0;  // peak resident set of the child (wait4 rusage)
+};
+
+// fork + execve with a fixed environment; stdin from `input` (at most one pipe buffer) or /dev/null,
+// stdout and stderr captured; killed after the timeout.
+RunResult run(const std::string &label, const std::string &path, const std::vector<std::string> &args,
+              const std::vector<std::string> &env, int timeout_ms = kChildTimeoutMs, const std::string &input = {}) {
+    RunResult r{label, {}, {}};
+    const auto started = std::chrono::steady_clock::now();
+    int fds[2];
+    if (pipe2(fds, O_CLOEXEC) != 0) {
+        r.status = std::string("pipe failed: ") + std::strerror(errno);
+        return r;
+    }
+    int stdin_pipe[2];
+    if (input.size() > 16 * 1024 || pipe2(stdin_pipe, O_CLOEXEC) != 0) {
+        r.status = input.size() > 16 * 1024 ? "stdin text too long" : std::string("pipe failed: ") + std::strerror(errno);
+        close(fds[0]);
+        close(fds[1]);
+        return r;
+    }
+    // The whole input fits in the pipe buffer, so writing it before the child runs cannot block.
+    const bool written = input.empty() || write(stdin_pipe[1], input.data(), input.size()) == static_cast<ssize_t>(input.size());
+    close(stdin_pipe[1]);
+    if (!written) {
+        r.status = std::string("stdin write failed: ") + std::strerror(errno);
+        for (int fd : {fds[0], fds[1], stdin_pipe[0]}) close(fd);
+        return r;
+    }
+    std::vector<char *> argv{const_cast<char *>(path.c_str())};
+    for (const auto &a : args) argv.push_back(const_cast<char *>(a.c_str()));
+    argv.push_back(nullptr);
+    std::vector<char *> envp;
+    for (const auto &e : env) envp.push_back(const_cast<char *>(e.c_str()));
+    envp.push_back(nullptr);
+
+    const pid_t pid = fork();
+    if (pid < 0) {
+        r.status = std::string("fork failed: ") + std::strerror(errno);
+        close(fds[0]);
+        close(fds[1]);
+        close(stdin_pipe[0]);
+        return r;
+    }
+    if (pid == 0) {  // only async-signal-safe calls until execve
+        dup2(stdin_pipe[0], STDIN_FILENO);
+        dup2(fds[1], STDOUT_FILENO);
+        dup2(fds[1], STDERR_FILENO);
+        execve(path.c_str(), argv.data(), envp.data());
+        const int e = errno;
+        static const char msg[] = "execve failed errno=";
+        (void)!write(STDOUT_FILENO, msg, sizeof(msg) - 1);
+        char num[4] = {static_cast<char>('0' + (e / 100) % 10), static_cast<char>('0' + (e / 10) % 10),
+                       static_cast<char>('0' + e % 10), '\n'};
+        (void)!write(STDOUT_FILENO, num, sizeof(num));
+        _exit(127);
+    }
+    close(fds[1]);
+    close(stdin_pipe[0]);
+    std::string out;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+    bool timed_out = false;
+    for (;;) {
+        const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - std::chrono::steady_clock::now());
+        if (left.count() <= 0) {
+            timed_out = true;
+            break;
+        }
+        struct pollfd p {fds[0], POLLIN, 0};
+        if (poll(&p, 1, static_cast<int>(left.count())) <= 0) continue;
+        char buf[4096];
+        const ssize_t n = read(fds[0], buf, sizeof(buf));
+        if (n <= 0) break;
+        if (out.size() < 256 * 1024) out.append(buf, static_cast<size_t>(n));
+    }
+    close(fds[0]);
+    if (timed_out) kill(pid, SIGKILL);
+    int status = 0;
+    struct rusage ru {};
+    wait4(pid, &status, 0, &ru);
+    r.maxrss_kb = ru.ru_maxrss;
+    r.wall_ms = static_cast<long>(std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - started).count());
+    if (timed_out) {
+        r.status = "timeout";
+    } else if (WIFEXITED(status)) {
+        r.status = "exit " + std::to_string(WEXITSTATUS(status));
+    } else if (WIFSIGNALED(status)) {
+        r.status = "signal " + std::to_string(WTERMSIG(status));
+    }
+    std::istringstream in(out);
+    for (std::string line; std::getline(in, line);) r.lines.push_back(line);
+    return r;
+}
+
+bool write_executable(const std::string &path, const void *data, size_t size, std::string &error) {
+    unlink(path.c_str());
+    int fd = open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0700);
+    if (fd < 0) {
+        error = std::string("create: ") + std::strerror(errno);
+        return false;
+    }
+    const bool ok = write(fd, data, size) == static_cast<ssize_t>(size);
+    if (!ok) error = std::string("write: ") + std::strerror(errno);
+    close(fd);
+    return ok;
+}
+
+bool copy_file(const std::string &from, const std::string &to, std::string &error) {
+    int in = open(from.c_str(), O_RDONLY | O_CLOEXEC);
+    if (in < 0) {
+        error = std::string("open: ") + std::strerror(errno);
+        return false;
+    }
+    std::string data;
+    char buf[65536];
+    for (ssize_t n; (n = read(in, buf, sizeof(buf))) > 0;) data.append(buf, static_cast<size_t>(n));
+    close(in);
+    return write_executable(to, data.data(), data.size(), error);
+}
+
+// Unmodified CloudStream plugins on the bundled ART (runtime-<arch>/, see runtime/make_dist.py), one
+// process per operation: imageless boot and verify-only compilation, so nothing is compiled to tmpfs.
+// Ahead-of-time compiled runtime (runtime/make-aot.sh): the boot image and odex files name the runtime by
+// a stable path, <runtime dir>/rt, a symlink to the installed runtime. Returns that path and the extra
+// VM options, or empty when the runtime has no AOT files for this path (ART then boots imageless).
+struct Aot {
+    std::string base;
+    std::vector<std::string> options;
+    std::string status;
+};
+
+Aot prepare_aot(const std::string &rt, const std::string &tmp) {
+    std::ifstream f(rt + "/AOT.json");
+    if (!f) return {{}, {}, "no AOT.json"};
+    const auto aot = nlohmann::json::parse(f, nullptr, false);
+    const std::string link = tmp + "/rt";
+    if (!aot.is_object() || aot.value("stable_path", "") != link || !aot.contains("bootclasspath")) {
+        return {{}, {}, "AOT.json is for " + (aot.is_object() ? aot.value("stable_path", "?") : std::string("?"))};
+    }
+    struct stat st {};
+    if (lstat(link.c_str(), &st) == 0) {
+        if (!S_ISLNK(st.st_mode)) return {{}, {}, link + " exists and is not a symlink"};  // never replace a real file
+        if (unlink(link.c_str()) != 0) return {{}, {}, "unlink " + link + ": " + std::strerror(errno)};
+    }
+    if (symlink(rt.c_str(), link.c_str()) != 0) return {{}, {}, "symlink " + link + ": " + std::strerror(errno)};
+    std::string bcp;
+    for (const auto &j : aot["bootclasspath"]) {
+        if (!j.is_string() || j.get<std::string>().find("..") != std::string::npos) return {{}, {}, "bad bootclasspath entry"};
+        bcp += (bcp.empty() ? "" : ":") + link + "/" + j.get<std::string>();
+    }
+    return {link, {"-Ximage:" + link + "/" + aot.value("image", "boot/boot.art"), "-Xbootclasspath:" + bcp}, "ok"};
+}
+
+void run_runtime_tests(const std::string &app_dir, const std::string &tmp, std::vector<RunResult> &results) {
+    const std::string installed = app_dir + "/" + kRuntimeDir;
+    std::ifstream spec(app_dir + "/testplugins/tests.json");
+    if (access((installed + "/lib/" + kLoader).c_str(), X_OK) != 0 || !spec) {
+        results.push_back({"runtime", "not bundled in this build", {}});
+        return;
+    }
+    const auto tests = nlohmann::json::parse(spec, nullptr, false);
+    if (!tests.is_array()) {
+        results.push_back({"runtime", "testplugins/tests.json is not a JSON array", {}});
+        return;
+    }
+    const Aot aot = prepare_aot(installed, tmp);
+    results.push_back({"runtime aot", aot.status, {}});
+    std::string icu;
+    if (std::ifstream v(installed + "/ICU_VERSION"); v) std::getline(v, icu);
+    mkdir((tmp + "/art").c_str(), 0700);
+    mkdir((tmp + "/home").c_str(), 0700);
+    mkdir((tmp + "/plugin-data").c_str(), 0700);
+    for (const auto &t : tests) {
+        if (!t.is_object()) continue;
+        // "aot": false runs a test imageless from the installed path, for comparison.
+        const bool use_aot = !aot.base.empty() && t.value("aot", true);
+        const std::string rt = use_aot ? aot.base : installed;
+        const std::vector<std::string> env{"PATH=" + rt + "/bin", "ANDROID_DATA=" + tmp + "/art", "HOME=" + tmp + "/home",
+                                           "ICU_DATA=" + rt + "/usr/share/icu/" + icu};
+        const std::string libs = rt + "/usr/lib:" + rt + "/usr/lib/art:" + rt + "/usr/lib/java/dex/art/natives:" + rt + "/lib";
+        std::vector<std::string> vm{"--library-path", libs, rt + "/usr/bin/dalvikvm", "-Xmx256m", "-Xnoimage-dex2oat",
+                                    "-Xcompiler-option", "--compiler-filter=verify",
+                                    "-Djavax.net.ssl.trustStore=" + rt + "/trust/cacerts",
+                                    "-Djava.library.path=" + rt + "/usr/lib/java/dex/art/natives",
+                                    "-cp", rt + "/csweb/csweb-host.dex:" + rt + "/csweb/cloudstream.jar",
+                                    "org.csweb.loader.Main", "--data", tmp + "/plugin-data"};
+        if (use_aot) vm.insert(vm.begin() + 4, aot.options.begin(), aot.options.end());
+        if (t.value("service", false)) {
+            // One long-lived runtime serving the scripted requests in "stdin"; @TESTPLUGINS@ is this
+            // package's testplugins/ directory. The session ends at end of input.
+            std::string input = t.value("stdin", "");
+            const std::string marker = "@TESTPLUGINS@", dir = app_dir + "/testplugins";
+            for (size_t at; (at = input.find(marker)) != std::string::npos;) input.replace(at, marker.size(), dir);
+            std::vector<std::string> args = vm;
+            args.insert(args.end(), {"--serve", "1"});
+            results.push_back(run("rt " + t.value("label", "service") + (use_aot ? "" : " [imageless]"), rt + "/lib/" + kLoader, args,
+                                  env, kRuntimeTimeoutMs, input));
+            continue;
+        }
+        if (!t.value("plugin", "").size() || !t.contains("args") || !t["args"].is_array()) continue;
+        const std::string plugin = t.value("plugin", "");
+        if (plugin.find('/') != std::string::npos) continue;  // file names inside testplugins/ only
+        std::vector<std::string> args = vm;
+        args.insert(args.end(), {"--plugin", app_dir + "/testplugins/" + plugin, "--sha256", t.value("sha256", ""),
+                                 "--timeout", "200"});
+        for (const auto &a : t["args"]) if (a.is_string()) args.push_back(a.get<std::string>());
+        // "stdin": the answers the native app would send (e.g. to a settings dialog, --ui stdin).
+        results.push_back(run("rt " + t.value("label", plugin) + (use_aot ? "" : " [imageless]"), rt + "/lib/" + kLoader, args,
+                              env, kRuntimeTimeoutMs, t.value("stdin", "")));
+    }
+}
+
+std::vector<RunResult> run_probes(const std::string &exe, const std::string &app_dir, const std::string &tmp) {
+    std::vector<RunResult> results;
+    const std::vector<std::string> env{"PATH=/usr/bin:/bin", "HOME=" + tmp, "LD_LIBRARY_PATH=" + app_dir + "/lib"};
+
+    // 1. The packaged ARM executable, from the read-only app directory, with network checks.
+    results.push_back(run("exec_app_dir", exe, {kChildFlag, app_dir, tmp, "net"}, env));
+
+    // 2. A copy on tmpfs: is a writable filesystem also an executable one (an unpacked runtime, oat files)?
+    std::string error;
+    const std::string copy = tmp + "/csprobe-copy";
+    if (copy_file(exe, copy, error)) {
+        results.push_back(run("exec_tmpfs_copy", copy, {kChildFlag, app_dir, tmp, "nonet"}, env));
+        unlink(copy.c_str());
+    } else {
+        results.push_back({"exec_tmpfs_copy", "copy failed: " + error, {}});
+    }
+
+    // 3. A 64-bit AArch64 program (an arm64 runtime build is the alternative to an armv7 one).
+    const auto elf = csprobe::aarch64_exit42_elf();
+    const std::string a64 = tmp + "/csprobe-a64";
+    if (write_executable(a64, elf.data(), elf.size(), error)) {
+        results.push_back(run("exec_aarch64", a64, {}, env));
+        unlink(a64.c_str());
+    } else {
+        results.push_back({"exec_aarch64", "write failed: " + error, {}});
+    }
+    run_runtime_tests(app_dir, tmp, results);
+    return results;
+}
+
+class ProbeScreen : public wnk::ui::Screen {
+ public:
+    ProbeScreen() : Screen("probe") {
+        name = "probe";
+        auto &col = add<wnk::ui::Column>(24);
+        col.set_padding(wnk::ui::Insets::all(60));
+        col.add<wnk::ui::Label>("Runtime feasibility probe — not CloudStream-compatible, runs no plugins",
+                                wnk::ui::TextRole::Title);
+        text_ = &col.add<wnk::ui::TextView>("Running…", wnk::ui::TextRole::Small);
+        text_->set_width(wnk::ui::Dim::fill());
+        text_->set_height(wnk::ui::Dim::fill());
+    }
+    void show(const std::string &s) { text_->set_text(s); }
+
+ private:
+    wnk::ui::TextView *text_ = nullptr;
+};
+
+class App : public wnk::app::Delegate {
+ public:
+    void on_start(wnk::app::Context &ctx) override {
+        auto &ui = ctx.ui();
+        nav_ = &ui.root().add<wnk::ui::Navigator>();
+        auto screen = std::make_unique<ProbeScreen>();
+        screen_ = screen.get();
+        nav_->push(ui, std::move(screen));
+
+        const std::string exe = ctx.launch().exe_path;
+        const std::string app_dir = ctx.launch().app_dir;
+        const std::string tmp = ctx.runtime_dir();
+        WNK_LOGI(kCat, "probe start exe=%s app_dir=%s runtime_dir=%s", exe.c_str(), app_dir.c_str(), tmp.c_str());
+        if (tmp.empty()) {
+            screen_->show("No runtime directory: cannot run the probe.");
+            WNK_LOGE(kCat, "no runtime dir");
+            return;
+        }
+        wnk::async::run_then_post<std::vector<RunResult>>(
+                ctx.pool(), ctx.dispatcher(), lifetime_.weak(), {},
+                [exe, app_dir, tmp](const wnk::async::CancellationToken &) { return run_probes(exe, app_dir, tmp); },
+                [this](std::vector<RunResult> results) {
+                    std::string text;
+                    for (const auto &r : results) {
+                        WNK_LOGI(kCat, "run %s status=%s lines=%zu wall_ms=%ld maxrss_kb=%ld", r.label.c_str(),
+                                 r.status.c_str(), r.lines.size(), r.wall_ms, r.maxrss_kb);
+                        text += "[" + r.label + "] " + r.status + " " + std::to_string(r.wall_ms) + " ms, " +
+                                std::to_string(r.maxrss_kb / 1024) + " MiB peak\n";
+                        for (const auto &line : r.lines) {
+                            WNK_LOGI(kCat, "%s %s", r.label.c_str(), line.c_str());
+                            text += "  " + line + "\n";
+                        }
+                    }
+                    WNK_LOGI(kCat, "probe done");
+                    screen_->show(text);
+                });
+    }
+
+ private:
+    wnk::async::Lifetime lifetime_;
+    wnk::ui::Navigator *nav_ = nullptr;
+    ProbeScreen *screen_ = nullptr;
+};
+
+}  // namespace
+
+int main(int argc, char **argv) {
+    if (argc >= 5 && std::strcmp(argv[1], kChildFlag) == 0) {
+        return csprobe::run_child_probe(argv[2], argv[3], std::strcmp(argv[4], "net") == 0);
+    }
+    wnk::app::AppConfig config;
+    config.fallback_app_id = "org.csweb.runtimeprobe";
+    config.title = "CS runtime probe";
+    config.script_env_prefix = "CSWEB_PROBE";
+    return wnk::app::run(argc, argv, config, [] { return std::make_unique<App>(); });
+}
