@@ -16,17 +16,17 @@ Il percorso completo richiede Linux, Docker, il webOS NDK e tempo/spazio per com
 tools/build-innohit-55.sh
 ```
 
-Il target package è `org.csweb.tv.legacy` versione candidata **0.6.1**; il titolo visualizzato nell'app è **CloudStream Hub - INNO-Hit 55**. Il file IPK viene creato sotto `external/webos-native-app-kit/build/webos-innohit55/dist/`. La CI prova anche il caricamento di una revisione fissata del plugin AnimeUnity di doGior nel runtime ARMv7 su host ARM: è un test del runtime, non della TV, e non garantisce la compatibilità di tutti i plugin. I job Legacy possono fallire senza bloccare i test host.
+Il target package è `org.csweb.tv.legacy` versione candidata **0.6.1**; il titolo visualizzato nell'app è **CloudStream Hub - INNO-Hit 55**. Il file IPK viene creato sotto `external/webos-native-app-kit/build/webos-innohit55/dist/`. La priorità di questa fase è l'app nativa webOS (avvio, navigazione, telecomando e schermate): non vengono incluse né preinstallate estensioni di terze parti. La compatibilità dei plugin è rinviata a una fase separata. I job Legacy sono sperimentali e possono fallire senza bloccare i test host.
 
-### Repo doGior
+### Estensioni (fase successiva)
 
-Nel profilo INNO-Hit l'app prova ad aggiungere automaticamente la repository doGior al primo avvio, usando il manifest ufficiale:
+CloudStream non include fonti video nell'app base. Questa build non preconfigura repository né installa plugin: quando la fase estensioni verrà affrontata, il manifest doGior da valutare sarà:
 
 ```text
 https://raw.githubusercontent.com/doGior/doGiorsHadEnough/refs/heads/builds/repo.json
 ```
 
-Non scarica né installa plugin automaticamente. Se la repo non appare (per esempio per un errore di rete), aggiungi lo stesso URL da **Settings → Extensions → Add repository**. La repo è mantenuta da terzi e la compatibilità va verificata per ogni plugin; WebView/UI Android, DRM, download e API non implementate potrebbero non funzionare.
+L'aggiunta della repo, il download del `.cs3`, il caricamento del provider e la riproduzione sono verifiche distinte. WebView/UI Android, DRM, download e API non implementate possono richiedere lavoro specifico o non funzionare.
 
 ## Compatibilità: cosa sappiamo e cosa no
 

@@ -6,6 +6,14 @@ Costruire una **nuova app webOS**, non un contenitore grafico Android. Waydroid 
 
 Waydroid dichiara di avviare un sistema Android completo in un container e dipende da Linux namespaces (user, pid, uts, net, mount, ipc), da un'immagine Android/LineageOS e dall'accesso alle risorse hardware. Il target dichiarato è una TV INNO-Hit con **webOS Hub**, non hardware LG: kernel, SoC, firmware e policy possono differire sia tra modelli OEM sia dal webOS TV di riferimento. Non si deve assumere la compatibilità degli IPK per LG, né la disponibilità di LXC, namespace, driver Binder o privilegi necessari ad avviare quel container. Inserire l'intera immagine Waydroid nell'IPK sarebbe inoltre molto pesante e non renderebbe automaticamente nativa l'interazione con telecomando, video e storage.
 
+## Decisione dopo la valutazione di Android Translation Layer (ATL)
+
+L'ATL indicato dall'utente (`android_translation_layer/android_translation_layer`) è un layer per eseguire APK Android su Linux desktop: avvia ART e fornisce implementazioni Android sopra GTK/Wayland, con JNI/native shims. Non è un runtime webOS già impacchettato e non produce da solo un IPK compatibile con webOS Hub. La revisione consultata del mirror GitHub `external-mirrors/android_translation_layer` è `b17fe9a`.
+
+Il port webOS che ho trovato, [WebOS-ATL](https://github.com/sarahahzub/WebOS-ATL), è un progetto distinto basato su ATL. Il suo README dichiara requisiti di TV LG rooted, Homebrew Channel con root OK, CPU `aarch64` e test solo su LG 43UR7500/webOS 23; inoltre esegue gli APK come root fuori dal sandbox webOS e usa hook di avvio, servizi privilegiati e interfacce specifiche LG. Il proprietario ha confermato che l'IH55UWB non è rooted. Perciò **non integreremo né installeremo WebOS-ATL sull'IH55UWB**: i suoi prerequisiti non sono soddisfatti e l'esecuzione root sarebbe una superficie di rischio non giustificata.
+
+La scelta per questo dispositivo è mantenere l'applicazione **nativa webOS** già basata su CSWeb TV. L'ATL resta un riferimento tecnico per ART e per valutare singole API Android durante una futura fase plugin; non verranno copiati in blocco GTK/Wayland, boot hook o servizi root. La fase app deve poter essere sviluppata e provata indipendentemente dai provider; dopo si affrontano caricamento e compatibilità dei plugin, un provider alla volta.
+
 ## Cosa riutilizzare dai progetti di riferimento
 
 ### CSWeb TV
@@ -36,7 +44,7 @@ Non si assume invece di poter portare su webOS l'intero container Waydroid, il s
 ```text
 IPK webOS
 ├── UI nativa TV (telecomando, catalogo, ricerca, dettagli)
-├── gestore repository/plugin (.cs3), con doGior preconfigurata nel profilo target
+├── gestore repository/plugin (.cs3), predisposto per la fase estensioni successiva
 ├── client IPC locale con timeout, limiti messaggi e log senza token
 ├── player webOS e adattatore link/sottotitoli
 └── runtime helper locale
@@ -68,7 +76,7 @@ Il manifest remoto da offrire nella UI (senza congelare l'elenco dei plugin nell
 https://raw.githubusercontent.com/doGior/doGiorsHadEnough/refs/heads/builds/repo.json
 ```
 
-Nel profilo INNO-Hit il manifest viene aggiunto una volta come repository preconfigurata; nessun `.cs3` viene scaricato o installato senza conferma. Se la rete non è disponibile al primo avvio, l'utente può aggiungere lo stesso URL da Settings → Extensions. I plugin sono serviti dal ramo `builds` aggiornato dal mantenitore; non committare `.cs3` scaricati nel progetto.
+La repo non è preconfigurata nella fase app. Verrà aggiunta e testata solo quando inizierà la fase plugin, con installazione esplicita dei singoli `.cs3`. I plugin sono serviti dal ramo `builds` aggiornato dal mantenitore; non committare `.cs3` scaricati nel progetto.
 
 ## Riferimenti primari
 

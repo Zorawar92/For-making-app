@@ -1,11 +1,12 @@
 # Stato di questa repository
 
 - Target software: profilo generico per INNO-Hit IH55UWB / IH55UWB4.
-- Dispositivo confermato dall'utente: IH55UWB, firmware `04.56.35`, versione webOS Hub visualizzata `7.5.8`.
+- Dispositivo confermato dall'utente: IH55UWB, firmware `04.56.35`, versione webOS Hub visualizzata `7.5.8`; l'utente ha confermato che la TV non è rooted.
+- ATL completo per webOS non è una strada per questo dispositivo: il fork WebOS-ATL richiede root, aarch64 e ha test dichiarati solo su LG 43UR7500. Strategia scelta: app UI nativa webOS; valutare API/ART ATL solo come riferimento per una fase futura dei plugin.
 - La pagina commerciale del produttore indica webOS 5.0; la discrepanza non è risolta, si dà priorità alla versione letta dal televisore.
 - Codice app/runtime importato da CSWeb TV commit `1708158f020c268fb1da4eade5238af4cf49ea54`; dettagli in `UPSTREAM.md`.
-- Aggiunte locali: opzione CMake `CSWEB_INNOHIT_55`, title profile, auto-aggiunta idempotente della repo doGior, script `tools/build-innohit-55.sh`, job artifact CI. Versione candidata `0.6.1`.
-- CI aggiunge un test di caricamento per AnimeUnity di doGior (commit plugin e SHA-256 fissati) nel runtime ARMv7 isolato; questo non sostituisce il test sulla TV né verifica search/playback.
+- Aggiunte locali: opzione CMake `CSWEB_INNOHIT_55`, title profile e script `tools/build-innohit-55.sh`. Versione candidata `0.6.1`.
+- Priorità corrente: verificare il port nativo dell'app e i flussi UI/webOS indipendentemente dai plugin; repo e provider di terzi sono rinviati alla fase successiva.
 - Test locali eseguiti: suite Python (37 test totali; 13 skip per toolchain/kit/plugin mancanti), `bash -n` sul nuovo script.
 - Ambiente di questo checkout: non dispone di CMake, Docker o webOS NDK; l'IPK non è stato compilato qui.
 - Osservazione utente: la release CSWeb TV 0.6.0 si installa/avvia sulla IH55UWB, ma i plugin non funzionano. Variante installata, provider specifico, fase di errore e log non ancora raccolti.
