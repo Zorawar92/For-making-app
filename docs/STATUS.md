@@ -1,7 +1,8 @@
 # Stato di questa repository
 
-- Target software: profilo generico per INNO-Hit IH55UWB / IH55UWB4 (webOS Hub 5.0 secondo scheda produttore).
-- Firmware riferito dall'utente: `04.56.35`; codice modello non ancora verificato.
+- Target software: profilo generico per INNO-Hit IH55UWB / IH55UWB4.
+- Dispositivo confermato dall'utente: IH55UWB, firmware `04.56.35`, versione webOS Hub visualizzata `7.5.8`.
+- La pagina commerciale del produttore indica webOS 5.0; la discrepanza non è risolta, si dà priorità alla versione letta dal televisore.
 - Codice app/runtime importato da CSWeb TV commit `1708158f020c268fb1da4eade5238af4cf49ea54`; dettagli in `UPSTREAM.md`.
 - Aggiunte locali: opzione CMake `CSWEB_INNOHIT_55`, title profile, script `tools/build-innohit-55.sh`, job artifact CI.
 - Test locali eseguiti: suite Python del progetto upstream (34 test totali; 13 skip per toolchain/kit/plugin mancanti), `bash -n` sul nuovo script.

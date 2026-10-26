@@ -4,9 +4,9 @@ Port nativo per webOS Hub, basato sul progetto community [CSWeb TV](https://gith
 
 ## Profilo INNO-Hit 55″
 
-Il profilo `CSWEB_INNOHIT_55` è per la famiglia di modelli pubblicata da INNO-Hit come **IH55UWB** e **IH55UWB4**. La scheda del produttore elenca per entrambi i codici la stessa piattaforma (CPU ARM Cortex-A55 quad-core, 1,5 GB RAM, 8 GB ROM, webOS 5.0). Il profilo crea **un singolo IPK** e seleziona la variante ARMv7 con `libcurl` incluso, così non dipende dalla `libcurl.so.4` del firmware più recente. Non è una prova di compatibilità: il pacchetto va ancora installato e testato su entrambe le varianti hardware.
+Il profilo `CSWEB_INNOHIT_55` è pensato per **IH55UWB** e **IH55UWB4**, i due codici INNO-Hit da 55″ con specifiche hardware pubblicate simili. Il proprietario ha confermato **IH55UWB**, firmware **04.56.35** e versione webOS Hub **7.5.8**. La scheda commerciale INNO-Hit riporta webOS 5.0, quindi c'è una discrepanza nella numerazione: per il dispositivo usiamo come dato osservato la versione mostrata dal menu TV.
 
-Hai riportato firmware **04.56.35** e diagonale 55″. Se trovi il codice sull'etichetta, controlla che sia `IH55UWB` o `IH55UWB4`; non pubblicare il numero seriale. Un modello diverso potrebbe richiedere una build distinta.
+Il profilo crea **un singolo IPK** con runtime ARMv7 e `libcurl` incluso: una scelta prudenziale finché non conosciamo ABI del kernel e disponibilità delle librerie sul firmware Hub. Non è una prova di compatibilità né una garanzia per IH55UWB4; l'IPK va installato e testato su entrambi. Un modello con hardware/firmware differente potrebbe richiedere un profilo distinto.
 
 ### Build locale
 
@@ -30,10 +30,10 @@ La repo è mantenuta da terzi, quindi non viene congelata nell'IPK: aggiungila n
 
 ## Compatibilità: cosa sappiamo e cosa no
 
-- **Obiettivo software:** i due codici INNO-Hit 55″ indicati sopra, webOS Hub 5.0.
-- **Dispositivo dell'utente:** firmware 04.56.35, TV da 55″; codice modello non ancora confermato.
+- **Modello confermato:** INNO-Hit IH55UWB; firmware 04.56.35; il menu TV riporta webOS Hub 7.5.8.
+- **Altro modello target:** IH55UWB4, non ancora confermato dall'utente e non testato.
 - **Verifica su INNO-Hit:** non ancora eseguita. L'IPK che supera `check-package` non equivale a una prova sulla TV.
-- La variante ARMv7 è scelta per il firmware webOS 5.x; il kernel ABI, l'API webOS Hub, le librerie grafiche/media e le policy d'installazione devono essere verificati sul dispositivo.
+- La variante ARMv7 è un profilo prudenziale, non una conclusione ricavata dal numero di versione. Kernel ABI, API webOS Hub, librerie grafiche/media e policy d'installazione vanno verificati sulla TV.
 
 Dopo l'installazione raccogli log e risultati per **entrambe** le sigle, se possibile. Segui la matrice in [docs/roadmap.md](docs/roadmap.md) e la guida upstream [compatibilità](docs/compatibility.md).
 

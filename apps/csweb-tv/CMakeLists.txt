@@ -4,9 +4,9 @@
 
 set(CSWEB_APP_ID org.csweb.tv)
 set(CSWEB_TITLE "CSWeb TV")
-# These two INNO-Hit 55-inch SKUs share the published SoC/RAM/webOS 5.0 configuration. The
-# family profile selects the ARMv7 runtime and bundled curl required by older webOS firmware;
-# it remains a hypothesis until an IPK is installed and tested on each SKU.
+# These two INNO-Hit 55-inch SKUs have similar published hardware specs. The TV reports webOS Hub
+# 7.5.8, while the product sheet says 5.0. Until the kernel ABI and firmware libraries are measured,
+# this conservative family profile selects ARMv7 ART plus bundled curl. It remains unverified on both SKUs.
 option(CSWEB_INNOHIT_55 "Build the shared INNO-Hit IH55UWB/IH55UWB4 webOS Hub profile" OFF)
 # The legacy package (docs/legacy-build.md): TVs whose kernel is 32-bit cannot start the aarch64
 # plugin runtime, and firmware before webOS 5.3.1 may lack libcurl.so.4. With this ON the package

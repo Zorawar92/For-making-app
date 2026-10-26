@@ -4,9 +4,9 @@ Stato: base app nativa CSWeb TV importata e profilo di build INNO-Hit 55 aggiunt
 
 ## Target generico della famiglia 55″
 
-La scheda del produttore elenca due codici 55″, **IH55UWB** e **IH55UWB4**, con specifiche comuni: webOS 5.0, CPU quad-core ARM Cortex-A55, GPU Mali-G31, RAM 1,5 GB e storage 8 GB. Il proprietario ha riportato firmware `04.56.35`, ma non ha ancora confermato il codice prodotto preciso.
+La scheda del produttore elenca i codici 55″ **IH55UWB** e **IH55UWB4** con specifiche hardware simili. Il proprietario ha confermato il modello **IH55UWB**, firmware `04.56.35` e versione webOS Hub `7.5.8`; la scheda commerciale indica invece webOS 5.0. Registriamo la versione visibile sul televisore come dato osservato e teniamo nota della discrepanza.
 
-Il profilo CMake `CSWEB_INNOHIT_55=ON` produce un singolo IPK con il runtime ARMv7 e `libcurl` incluso. Questa scelta evita la dipendenza dalla `libcurl.so.4` del firmware che la build principale richiede sui webOS più recenti. Il processore è ARMv8-capable, ma questo **non dimostra** l'ABI del kernel o delle librerie del firmware Hub: il profilo è sperimentale fino alle prove sulle TV reali.
+Il profilo CMake `CSWEB_INNOHIT_55=ON` produce un singolo IPK con runtime ARMv7 e `libcurl` incluso. È una scelta conservativa in assenza di una lettura di `uname -m` e dell'inventario delle librerie del firmware, non una deduzione dal numero di versione. Il processore ARM Cortex-A55 supporta capacità ARMv8, ma questo **non dimostra** l'ABI kernel/userspace effettivamente installata. Il profilo resta sperimentale finché non è provato su IH55UWB e IH55UWB4.
 
 ### Gate prima della release stabile
 
