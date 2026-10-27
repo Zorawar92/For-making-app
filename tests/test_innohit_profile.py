@@ -25,6 +25,16 @@ class InnoHitProfileTest(unittest.TestCase):
         app = (ROOT / "apps/csweb-tv/src/app/application.cpp").read_text()
         self.assertNotIn('doGiorsHadEnough', app)
 
+    def test_release_attaches_prebuilt_innohit_package_without_building_on_each_push(self):
+        ci = (ROOT / ".github/workflows/ci.yml").read_text()
+        release = (ROOT / ".github/workflows/release.yml").read_text()
+        publish = (ROOT / ".github/workflows/publish-prebuilt-ipk.yml").read_text()
+        self.assertIn("github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call'", ci)
+        self.assertIn('name: innohit-55-webos-hub-ipk', release)
+        self.assertIn('name: innohit-55-webos-hub-ipk', publish)
+        self.assertIn('run-id:', publish)
+        self.assertIn('gh release create', publish)
+
 
 if __name__ == "__main__":
     unittest.main()

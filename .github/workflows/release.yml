@@ -111,12 +111,12 @@ jobs:
 
       # Legacy package (docs/legacy-build.md), optional: published only when CI built it and its runtime
       # has licence notices (runtime/licenses-armv7/); otherwise the release is exactly the main package.
-      - name: Get the legacy package
+      - name: Get the INNO-Hit 55 package
         id: legacy-ipk
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
-          name: org.csweb.tv.legacy-ipk
+          name: innohit-55-webos-hub-ipk
           path: dist-legacy
 
       - name: Legacy package and its manifest
@@ -137,9 +137,9 @@ jobs:
               "id": "org.csweb.tv.legacy",
               "version": version,
               "type": "native",
-              "title": "CSWeb TV Legacy",
-              "appDescription": "CSWeb TV for older LG TVs with a 32-bit kernel (webOS 4.x and similar). "
-                                "Runs CloudStream extensions natively. Ships no content or plugins.",
+              "title": "CloudStream Hub - INNO-Hit 55",
+              "appDescription": "Experimental native webOS build for INNO-Hit IH55UWB (IH55UWB4 not tested). "
+                                "Ships no third-party repositories, content or plugins.",
               "iconUri": f"https://raw.githubusercontent.com/{repo}/{sha}/apps/csweb-tv/packaging/icons/largeIcon.png",
               "sourceUrl": f"https://github.com/{repo}",
               "rootRequired": False,
@@ -180,9 +180,9 @@ jobs:
             legacy_sha=$(cut -d' ' -f1 dist-legacy/SHA256SUMS-legacy)
             {
               echo
-              echo "**Legacy package (older TVs with a 32-bit kernel, e.g. webOS 4.x):** \`org.csweb.tv.legacy_${VERSION}_arm.ipk\`, SHA-256 \`$legacy_sha\`."
-              echo "Install it only if the main package's log shows \`runtime: exited (code 127)\` or \`no HTTP transport\`."
-              echo "It carries an armv7 plugin runtime (\`runtime-armv7/licenses/\`) and its own libcurl (\`licenses-libcurl/\`); see \`docs/legacy-build.md\`."
+              echo "**INNO-Hit 55 candidate package:** \`org.csweb.tv.legacy_${VERSION}_arm.ipk\`, SHA-256 \`$legacy_sha\`."
+              echo "Targets IH55UWB; IH55UWB4 and all TV behavior remain unverified. The package passed CI checks but has not been tested on an INNO-Hit TV."
+              echo "It uses an armv7 plugin runtime and bundled libcurl. It ships no third-party repository or plugin; add extensions only in the later plugin phase."
             } >> notes.md
           fi
           cat notes.md
