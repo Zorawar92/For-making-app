@@ -1,6 +1,6 @@
 # Roadmap e gate di fattibilità
 
-Stato: base app nativa CSWeb TV importata e profilo di build INNO-Hit 55 aggiunto. L'IPK non è ancora stato compilato né verificato su un televisore INNO-Hit.
+Stato: l'utente ha installato l'IPK candidato 0.6.1 e conferma che l'app si avvia su IH55UWB. La grafica non coincide con CloudStream Android e la repo doGior/plugin non ha ancora funzionato. L'IPK con i bundle locali selezionati è in sviluppo e non è ancora testato sulla TV.
 
 ## Target generico della famiglia 55″
 
@@ -28,11 +28,12 @@ Il profilo CMake `CSWEB_INNOHIT_55=ON` produce un singolo IPK con runtime ARMv7 
 - Verificare l'IPK con `check-package` e annotare commit/hash dell'output.
 - Non distribuire l'IPK finché gli avvisi runtime in `runtime/licenses-armv7/` e le licenze dei componenti sono verificati.
 
-## Gate 2 — provider e playback
+## Gate 2 — bundle doGior, provider e playback
 
-- Questa fase app non preconfigura né installa plugin; aggiunta repo e provider fanno parte della fase successiva.
-- Provare i provider singolarmente: caricamento plugin, ricerca, dettagli, link e playback sono gate distinti.
+- Build personale opt-in: includere StreamingCommunity, AnimeUnity e AnimeWorld pre-scaricati, verificarne hash e importarli/abilitarli al primo avvio. I file `.cs3` non sono committati e non entrano nelle Release pubbliche.
+- Provare i tre plugin singolarmente sulla IH55UWB: caricamento, ricerca, dettagli, estrazione link e riproduzione sono gate distinti; raccogliere errore e log del runtime.
 - Rendere note le limitazioni dei plugin che richiedono WebView, UI Android/AndroidX, DRM o servizi non disponibili.
+- La UI nativa webOS è stata confermata avviabile ma non visivamente equivalente a CloudStream Android; raccogliere screenshot prima di pianificare le modifiche grafiche.
 
 ## Gate 3 — rilascio
 

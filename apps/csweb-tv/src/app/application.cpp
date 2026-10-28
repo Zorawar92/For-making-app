@@ -115,6 +115,7 @@ void Application::on_start(wnk::app::Context &ctx) {
     deps.kv = ctx.store();
     deps.runtime = runtime_.get();
     deps.plugin_dir = plugin_dir;
+    deps.bundled_plugins_dir = app_dir + "/bundled-plugins";
     plugins_ = std::make_unique<plugins::PluginManager>(std::move(deps));
     services_.plugins = plugins_.get();
     plugins_->on_changed = [this] { services_.plugins_changed.emit(); };

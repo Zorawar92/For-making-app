@@ -6,10 +6,11 @@
 - La pagina commerciale del produttore indica webOS 5.0; la discrepanza non è risolta, si dà priorità alla versione letta dal televisore.
 - Codice app/runtime importato da CSWeb TV commit `1708158f020c268fb1da4eade5238af4cf49ea54`; dettagli in `UPSTREAM.md`.
 - Aggiunte locali: opzione CMake `CSWEB_INNOHIT_55`, title profile e script `tools/build-innohit-55.sh`. Versione candidata `0.6.1`.
-- Priorità corrente: verificare il port nativo dell'app e i flussi UI/webOS indipendentemente dai plugin; repo e provider di terzi sono rinviati alla fase successiva.
-- Test locali eseguiti: suite Python (37 test totali; 13 skip per toolchain/kit/plugin mancanti), `bash -n` sul nuovo script.
-- Ambiente di questo checkout: non dispone di CMake, Docker o webOS NDK; l'IPK non è stato compilato qui.
-- Osservazione utente: la release CSWeb TV 0.6.0 si installa/avvia sulla IH55UWB, ma i plugin non funzionano. Variante installata, provider specifico, fase di errore e log non ancora raccolti.
-- Test eseguiti da questo fork su INNO-Hit: nessuno. I risultati di `docs/FEASIBILITY_DECISION.md` sono test upstream su un LG OLED C1 e non dimostrano compatibilità con webOS Hub.
+- L'utente ha confermato che il pacchetto candidato si avvia sulla IH55UWB; riferisce che la grafica differisce dall'app Android e che i plugin doGior non funzionano. L'interfaccia del port è nativa webOS.
+- Direzione plugin corrente: bundle personale opt-in con StreamingCommunity, AnimeUnity e AnimeWorld, fissati a una revisione del ramo `builds`, importati e abilitati al primo avvio. I `.cs3` restano fuori da Git e dalle Release pubbliche perché la repo non dichiara una licenza.
+- Nessun plugin doGior è ancora stato testato sulla IH55UWB. La selezione per il bundle non implica compatibilità; occorrono errori/log e prove per plugin.
+- Test locali dopo il bundle: suite Python (43 test, 4 skip), `bash -n`, validazione dei tre `.cs3` scaricati e compilazione sintattica C++ dei file modificati. Non è stato creato un IPK con bundle.
+- Ambiente di questo checkout: dispone di g++, ma non di CMake, Docker o webOS NDK; l'IPK personale non può essere compilato qui.
+- I risultati in `docs/FEASIBILITY_DECISION.md` sono prove upstream su LG OLED C1, non su webOS Hub INNO-Hit.
 
 Prossima diagnosi: distinguere lettura della repository, download del `.cs3`, avvio ART e registrazione del provider; raccogliere `events.log` e `runtime.log` prima del riavvio. Vedi `docs/compatibility.md` e `docs/roadmap.md`.

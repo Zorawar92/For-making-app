@@ -12,7 +12,7 @@ L'ATL indicato dall'utente (`android_translation_layer/android_translation_layer
 
 Il port webOS che ho trovato, [WebOS-ATL](https://github.com/sarahahzub/WebOS-ATL), è un progetto distinto basato su ATL. Il suo README dichiara requisiti di TV LG rooted, Homebrew Channel con root OK, CPU `aarch64` e test solo su LG 43UR7500/webOS 23; inoltre esegue gli APK come root fuori dal sandbox webOS e usa hook di avvio, servizi privilegiati e interfacce specifiche LG. Il proprietario ha confermato che l'IH55UWB non è rooted. Perciò **non integreremo né installeremo WebOS-ATL sull'IH55UWB**: i suoi prerequisiti non sono soddisfatti e l'esecuzione root sarebbe una superficie di rischio non giustificata.
 
-La scelta per questo dispositivo è mantenere l'applicazione **nativa webOS** già basata su CSWeb TV. L'ATL resta un riferimento tecnico per ART e per valutare singole API Android durante una futura fase plugin; non verranno copiati in blocco GTK/Wayland, boot hook o servizi root. La fase app deve poter essere sviluppata e provata indipendentemente dai provider; dopo si affrontano caricamento e compatibilità dei plugin, un provider alla volta.
+La scelta per questo dispositivo è mantenere l'applicazione **nativa webOS** già basata su CSWeb TV. L'ATL resta un riferimento tecnico per ART e per valutare singole API Android; non verranno copiati in blocco GTK/Wayland, boot hook o servizi root. L'app gira sulla IH55UWB secondo il test dell'utente; ora si affrontano, separatamente, la somiglianza grafica con CloudStream Android e la compatibilità dei provider.
 
 ## Cosa riutilizzare dai progetti di riferimento
 
@@ -44,7 +44,7 @@ Non si assume invece di poter portare su webOS l'intero container Waydroid, il s
 ```text
 IPK webOS
 ├── UI nativa TV (telecomando, catalogo, ricerca, dettagli)
-├── gestore repository/plugin (.cs3), predisposto per la fase estensioni successiva
+├── gestore repository/plugin (.cs3) con import di bundle offline opzionale
 ├── client IPC locale con timeout, limiti messaggi e log senza token
 ├── player webOS e adattatore link/sottotitoli
 └── runtime helper locale
@@ -76,7 +76,7 @@ Il manifest remoto da offrire nella UI (senza congelare l'elenco dei plugin nell
 https://raw.githubusercontent.com/doGior/doGiorsHadEnough/refs/heads/builds/repo.json
 ```
 
-La repo non è preconfigurata nella fase app. Verrà aggiunta e testata solo quando inizierà la fase plugin, con installazione esplicita dei singoli `.cs3`. I plugin sono serviti dal ramo `builds` aggiornato dal mantenitore; non committare `.cs3` scaricati nel progetto.
+Il programma di build locale può, con opt-in esplicito, scaricare StreamingCommunity, AnimeUnity e AnimeWorld dalla revisione fissata del ramo `builds`, verificare SHA-256 e formato `.cs3`, poi includerli nell'IPK personale. Al primo avvio il manager importa e abilita i plugin mancanti dallo storage locale e registra la repo; una copia già installata dall'utente non viene sovrascritta. I binari restano fuori da Git e dalle Release pubbliche: la repo non dichiara una licenza e l'inclusione pubblica richiede verifica/permesso. L'import offline non implica compatibilità delle API o del playback sulla IH55UWB.
 
 ## Riferimenti primari
 
