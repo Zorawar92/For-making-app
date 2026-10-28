@@ -10,6 +10,10 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <cctype>
+#include <fstream>
+#include <iterator>
+#include <nlohmann/json.hpp>
 
 namespace csweb::plugins {
 
@@ -22,6 +26,7 @@ constexpr size_t kMaxPluginBytes = 32u << 20;  // a .cs3
 struct StoreRead {
     std::vector<RepositoryData> repos;
     std::vector<InstalledPlugin> installed;
+    std::vector<std::string> seed_errors;
 };
 
 struct InstallResult {
@@ -29,6 +34,143 @@ struct InstallResult {
     std::string error;
     InstalledPlugin record;
 };
+
+struct BundledPlugin {
+    InstalledPlugin record;
+    std::string bytes;
+};
+
+struct BundledSet {
+    RepositoryData repository;
+    std::vector<BundledPlugin> plugins;
+    std::vector<std::string> errors;
+};
+
+bool read_bundled_set(const std::string &dir, BundledSet *out) {
+    const std::string index_path = dir + "/manifest.json";
+    if (::access(index_path.c_str(), F_OK) != 0) return true;  // regular packages have no local bundle
+    std::ifstream file(index_path, std::ios::binary);
+    if (!file) {
+        out->errors.push_back("could not open bundled-plugins/manifest.json");
+        return false;
+    }
+    const std::string text{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+    if (text.size() > kMaxRepoBytes) {
+        out->errors.push_back("bundled plugin manifest exceeds the size limit");
+        return false;
+    }
+    const auto j = nlohmann::json::parse(text, nullptr, false);
+    if (!j.is_object() || j.value("schemaVersion", 0) != 1 || !j.contains("repository") || !j["repository"].is_object() ||
+        !j.contains("plugins") || !j["plugins"].is_array()) {
+        out->errors.push_back("bundled plugin manifest has an unsupported format");
+        return false;
+    }
+    const auto &repo = j["repository"];
+    if (!repo.contains("name") || !repo["name"].is_string() || !repo.contains("url") || !repo["url"].is_string()) {
+        out->errors.push_back("bundled plugin manifest has no repository name or URL");
+        return false;
+    }
+    out->repository = {repo["name"].get<std::string>(), repo["url"].get<std::string>(), repo.value("iconUrl", "")};
+    for (const auto &entry : j["plugins"]) {
+        if (!entry.is_object() || !entry.contains("file") || !entry["file"].is_string() ||
+            !entry.contains("internalName") || !entry["internalName"].is_string() ||
+            !entry.contains("sha256") || !entry["sha256"].is_string() ||
+            !entry.contains("version") || !entry["version"].is_number_integer()) {
+            out->errors.push_back("skipped a bundled plugin with incomplete metadata");
+            continue;
+        }
+        const std::string filename = entry["file"].get<std::string>();
+        const std::string internal = entry["internalName"].get<std::string>();
+        const bool safe_name = !filename.empty() && filename.size() <= 128 &&
+                               std::all_of(filename.begin(), filename.end(), [](unsigned char c) {
+                                   return std::isalnum(c) || c == '.' || c == '_' || c == '-';
+                               }) && filename.find("..") == std::string::npos && filename.size() > 4 &&
+                               filename.substr(filename.size() - 4) == ".cs3";
+        if (!safe_name || internal.empty()) {
+            out->errors.push_back("skipped a bundled plugin with an unsafe file name");
+            continue;
+        }
+        const std::string path = dir + "/" + filename;
+        std::ifstream plugin_file(path, std::ios::binary);
+        if (!plugin_file) {
+            out->errors.push_back("missing bundled plugin file " + filename);
+            continue;
+        }
+        std::string bytes{std::istreambuf_iterator<char>(plugin_file), std::istreambuf_iterator<char>()};
+        if (bytes.empty() || bytes.size() > kMaxPluginBytes) {
+            out->errors.push_back(filename + " is empty or exceeds the plugin size limit");
+            continue;
+        }
+        std::string expected = entry["sha256"].get<std::string>();
+        std::transform(expected.begin(), expected.end(), expected.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        if (!core::is_sha256_hex(expected) || core::Sha256::hex(bytes) != expected) {
+            out->errors.push_back(filename + " failed SHA-256 verification");
+            continue;
+        }
+        const auto archive = core::check_plugin_archive(bytes);
+        if (!archive.ok) {
+            out->errors.push_back(filename + " is not a valid .cs3 archive: " + archive.error);
+            continue;
+        }
+        BundledPlugin bundled;
+        auto &record = bundled.record;
+        record.id = plugin_id(out->repository.url, internal);
+        record.internal_name = internal;
+        record.name = entry.value("name", internal);
+        record.repository_url = out->repository.url;
+        record.url = entry.value("url", "");
+        record.version = entry["version"].get<int>();
+        record.sha256 = expected;
+        record.size = static_cast<long long>(bytes.size());
+        record.language = entry.value("language", "");
+        record.icon_url = entry.value("iconUrl", "");
+        if (entry.contains("tvTypes") && entry["tvTypes"].is_array()) {
+            for (const auto &type : entry["tvTypes"]) if (type.is_string()) record.tv_types.push_back(type.get<std::string>());
+        }
+        record.enabled = true;
+        bundled.bytes = std::move(bytes);
+        out->plugins.push_back(std::move(bundled));
+    }
+    return true;
+}
+
+StoreRead read_store_with_bundled_plugins(PluginStore *store, const std::string &dir) {
+    StoreRead read{store->repositories(), store->installed(), {}};
+    BundledSet bundled;
+    if (!read_bundled_set(dir, &bundled)) {
+        read.seed_errors = std::move(bundled.errors);
+        return read;
+    }
+    read.seed_errors = std::move(bundled.errors);
+    if (bundled.plugins.empty()) return read;
+
+    const bool repo_exists = std::any_of(read.repos.begin(), read.repos.end(), [&](const RepositoryData &r) {
+        return r.url == bundled.repository.url;
+    });
+    if (!repo_exists) {
+        read.repos.push_back(bundled.repository);
+        std::string error;
+        if (!store->save_repositories(read.repos, &error)) {
+            read.seed_errors.push_back("could not save the bundled repository: " + error);
+            read.repos.pop_back();
+            return read;
+        }
+    }
+    for (auto &plugin : bundled.plugins) {
+        const bool installed = std::any_of(read.installed.begin(), read.installed.end(), [&](const InstalledPlugin &p) {
+            return p.id == plugin.record.id;
+        });
+        if (installed) continue;  // do not overwrite a user's installed or updated version
+        std::string error;
+        if (!store->install(plugin.record, plugin.bytes, &error)) {
+            read.seed_errors.push_back("could not install bundled " + plugin.record.name + ": " + error);
+            continue;
+        }
+        read.installed.push_back(std::move(plugin.record));
+    }
+    return read;
+}
 
 std::string net_error(const wnk::net::HttpResponse &r) {
     if (r.error != wnk::net::NetError::None) return std::string("network: ") + wnk::net::error_name(r.error);
@@ -74,12 +216,16 @@ void PluginManager::start() {
         return;
     }
     PluginStore *store = store_.get();
+    const std::string bundled_dir = deps_.bundled_plugins_dir;
     wnk::async::run_then_post<StoreRead>(
         *deps_.pool, *deps_.main, life_.weak(), {},
-        [store](const wnk::async::CancellationToken &) { return StoreRead{store->repositories(), store->installed()}; },
+        [store, bundled_dir](const wnk::async::CancellationToken &) {
+            return read_store_with_bundled_plugins(store, bundled_dir);
+        },
         [this](StoreRead r) {
             repos_ = std::move(r.repos);
             installed_ = std::move(r.installed);
+            for (const auto &error : r.seed_errors) WNK_LOGW(kCat, "bundled plugins: %s", error.c_str());
             started_ = true;
             WNK_LOGI(kCat, "plugins: %zu repositories, %zu installed", repos_.size(), installed_.size());
             if (runtime_ready_) {

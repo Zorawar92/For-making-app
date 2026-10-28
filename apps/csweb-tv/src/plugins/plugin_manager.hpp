@@ -41,6 +41,7 @@ class PluginManager {
         wnk::storage::KeyValueStore *kv = nullptr;      // may be null (store unavailable)
         runtime::RuntimeClient *runtime = nullptr;
         std::string plugin_dir;                         // tmpfs directory the runtime reads plugins from
+        std::string bundled_plugins_dir;                // optional app asset directory with preselected .cs3 files
     };
 
     explicit PluginManager(Deps deps);

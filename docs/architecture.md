@@ -6,6 +6,14 @@ Costruire una **nuova app webOS**, non un contenitore grafico Android. Waydroid 
 
 Waydroid dichiara di avviare un sistema Android completo in un container e dipende da Linux namespaces (user, pid, uts, net, mount, ipc), da un'immagine Android/LineageOS e dall'accesso alle risorse hardware. Il target dichiarato è una TV INNO-Hit con **webOS Hub**, non hardware LG: kernel, SoC, firmware e policy possono differire sia tra modelli OEM sia dal webOS TV di riferimento. Non si deve assumere la compatibilità degli IPK per LG, né la disponibilità di LXC, namespace, driver Binder o privilegi necessari ad avviare quel container. Inserire l'intera immagine Waydroid nell'IPK sarebbe inoltre molto pesante e non renderebbe automaticamente nativa l'interazione con telecomando, video e storage.
 
+## Decisione dopo la valutazione di Android Translation Layer (ATL)
+
+L'ATL indicato dall'utente (`android_translation_layer/android_translation_layer`) è un layer per eseguire APK Android su Linux desktop: avvia ART e fornisce implementazioni Android sopra GTK/Wayland, con JNI/native shims. Non è un runtime webOS già impacchettato e non produce da solo un IPK compatibile con webOS Hub. La revisione consultata del mirror GitHub `external-mirrors/android_translation_layer` è `b17fe9a`.
+
+Il port webOS che ho trovato, [WebOS-ATL](https://github.com/sarahahzub/WebOS-ATL), è un progetto distinto basato su ATL. Il suo README dichiara requisiti di TV LG rooted, Homebrew Channel con root OK, CPU `aarch64` e test solo su LG 43UR7500/webOS 23; inoltre esegue gli APK come root fuori dal sandbox webOS e usa hook di avvio, servizi privilegiati e interfacce specifiche LG. Il proprietario ha confermato che l'IH55UWB non è rooted. Perciò **non integreremo né installeremo WebOS-ATL sull'IH55UWB**: i suoi prerequisiti non sono soddisfatti e l'esecuzione root sarebbe una superficie di rischio non giustificata.
+
+La scelta per questo dispositivo è mantenere l'applicazione **nativa webOS** già basata su CSWeb TV. L'ATL resta un riferimento tecnico per ART e per valutare singole API Android; non verranno copiati in blocco GTK/Wayland, boot hook o servizi root. L'app gira sulla IH55UWB secondo il test dell'utente; ora si affrontano, separatamente, la somiglianza grafica con CloudStream Android e la compatibilità dei provider.
+
 ## Cosa riutilizzare dai progetti di riferimento
 
 ### CSWeb TV
@@ -36,7 +44,7 @@ Non si assume invece di poter portare su webOS l'intero container Waydroid, il s
 ```text
 IPK webOS
 ├── UI nativa TV (telecomando, catalogo, ricerca, dettagli)
-├── gestore repository/plugin (.cs3), con doGior come repo opt-in
+├── gestore repository/plugin (.cs3) con import di bundle offline opzionale
 ├── client IPC locale con timeout, limiti messaggi e log senza token
 ├── player webOS e adattatore link/sottotitoli
 └── runtime helper locale
@@ -65,14 +73,14 @@ Non promettere compatibilità generale con tutti i provider Cloudstream. In part
 Il manifest remoto da offrire nella UI (senza congelare l'elenco dei plugin nell'IPK) è:
 
 ```text
-https://raw.githubusercontent.com/doGior/doGiorsHadEnough/builds/repo.json
+https://raw.githubusercontent.com/doGior/doGiorsHadEnough/refs/heads/builds/repo.json
 ```
 
-La prima milestone dovrebbe consentire di aggiungere la repo manualmente, leggere il manifest, mostrare l'elenco e installare un plugin campione solo dopo conferma. I plugin vanno caricati dal ramo `builds` aggiornato dal mantenitore; non committare `.cs3` scaricati nel progetto.
+Il programma di build locale può, con opt-in esplicito, scaricare StreamingCommunity, AnimeUnity e AnimeWorld dalla revisione fissata del ramo `builds`, verificare SHA-256 e formato `.cs3`, poi includerli nell'IPK personale. Al primo avvio il manager importa e abilita i plugin mancanti dallo storage locale e registra la repo; una copia già installata dall'utente non viene sovrascritta. I binari restano fuori da Git e dalle Release pubbliche: la repo non dichiara una licenza e l'inclusione pubblica richiede verifica/permesso. L'import offline non implica compatibilità delle API o del playback sulla IH55UWB.
 
 ## Riferimenti primari
 
 - [Waydroid README](https://github.com/waydroid/waydroid): container Android completo e requisiti Linux.
 - [CSWeb TV README](https://github.com/sostk/cloudstream-webos-native): architettura, pacchetti, limiti e guida di build.
 - [Decisione di fattibilità CSWeb TV](https://github.com/sostk/cloudstream-webos-native/blob/main/docs/FEASIBILITY_DECISION.md): esempi di plugin provati, limiti e risorse misurate.
-- [doGior manifest](https://raw.githubusercontent.com/doGior/doGiorsHadEnough/builds/repo.json).
+- [doGior manifest](https://raw.githubusercontent.com/doGior/doGiorsHadEnough/refs/heads/builds/repo.json).
