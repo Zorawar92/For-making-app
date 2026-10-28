@@ -14,8 +14,11 @@ work.
 ```
 <runtime>/lib/ld-musl-<arch>.so.1 --library-path … <runtime>/usr/bin/dalvikvm -Xmx256m … \
     -cp <runtime>/csweb/csweb-host.dex:<runtime>/csweb/cloudstream.jar \
-    org.csweb.loader.Main --serve 1 --data <writable dir> [--workers 4]
+    org.csweb.loader.Main --serve 1 --data <writable dir> --dns <CloudStream DNS value> [--workers 4]
 ```
+
+`--dns` seeds CloudStream's `dns_key` before its shared OkHttp client is initialized. The app maps its
+persisted choice to CloudStream's values (AdGuard `4`, Google `1`, Cloudflare `2`, and so on).
 
 The first line on stdout is `{"event":"ready","protocol":1}`. Plugin and runtime diagnostics go to stderr.
 
@@ -31,6 +34,7 @@ The first line on stdout is `{"event":"ready","protocol":1}`. Plugin and runtime
 | `details` | `provider`, `url`, [`limit`] | `details` (plain properties plus `backgroundPosterUrl`, `logoUrl`, `duration`, `score`, `tags`, `actors`, `recommendations`, `trailers`, `seasons`, `showStatus`), `episode`… (`dub` for anime episode lists) |
 | `links` | `provider`, `url` (the data from details), [`withHeaders`] | `link`… (`linkType`, `quality`, `referer`; header values only with `withHeaders`, names otherwise), `subtitle`…, `links_returned` |
 | `settings` | `plugin` | `dialog`… (see dialog-protocol.md) |
+| `dns` | `value` (CloudStream `dns_key` integer) | rebuilds CloudStream's shared OkHttp client with the new preference |
 | `cancel` | `target` (a request id) | the target ends with `error` (`Cancelled`) and `done ok:false` |
 | `shutdown` | | waits for earlier requests, then exits |
 | `answer` | `dialog`, plus the dialog answer fields | none; routed to the request showing that dialog |
@@ -44,9 +48,9 @@ End of input acts as `shutdown`, and dialogs still waiting for an answer end wit
 
 ## Ordering and concurrency
 
-- `load`, `unload` and `shutdown` run one at a time, after every request received before them.
+- `load`, `unload`, `dns` and `shutdown` run one at a time, after every request received before them.
 - All other requests run concurrently on a pool (`--workers`, default 4), each after every
-  `load`/`unload` received before it. So "load, then search" in that order always works, and searches
+  `load`/`unload`/`dns` received before it. So "load, then search" in that order always works, and searches
   across providers run in parallel.
 - Cancellation cancels the request's coroutine (CloudStream's HTTP calls are suspending) and interrupts its
   thread.

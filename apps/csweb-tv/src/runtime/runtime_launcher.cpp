@@ -54,7 +54,7 @@ Aot prepare_aot(const std::string &installed, const std::string &tmp) {
 }  // namespace
 
 LaunchPlan plan_runtime_launch(const std::string &runtime_dir, const std::string &tmp_dir, const std::string &data_dir,
-                               int heap_mb) {
+                               int heap_mb, int cloudstream_dns_value) {
     LaunchPlan plan;
     std::string loader;
 #ifdef CSWEB_LEGACY
@@ -101,7 +101,8 @@ LaunchPlan plan_runtime_launch(const std::string &runtime_dir, const std::string
     for (std::string a : {"-Djavax.net.ssl.trustStore=" + rt + "/trust/cacerts",
                           "-Djava.library.path=" + rt + "/usr/lib/java/dex/art/natives", std::string("-cp"),
                           rt + "/csweb/csweb-host.dex:" + rt + "/csweb/cloudstream.jar", std::string("org.csweb.loader.Main"),
-                          std::string("--data"), data_dir, std::string("--serve"), std::string("1")}) {
+                          std::string("--data"), data_dir, std::string("--serve"), std::string("1"),
+                          std::string("--dns"), std::to_string(cloudstream_dns_value)}) {
         s.args.push_back(std::move(a));
     }
     s.env = {"PATH=" + rt + "/bin", "ANDROID_DATA=" + tmp_dir + "/art", "HOME=" + tmp_dir + "/home"};

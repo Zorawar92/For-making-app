@@ -57,6 +57,11 @@ final class Service {
         Thread.setDefaultUncaughtExceptionHandler((thread, t) -> Main.error("thread:" + thread.getName(), t));
         UiHost.install(new Main.LoaderUi());
         Main.answers = Service::nextAnswer;
+        try {
+            Main.configureDns(Main.dnsProviderValue, data);
+        } catch (Exception e) {
+            throw new IllegalStateException("cannot configure CloudStream DNS", e);
+        }
         Main.initApp();
         ExecutorService admin = Executors.newSingleThreadExecutor(daemon("csweb-admin"));
         ExecutorService ops = Executors.newFixedThreadPool(workers, daemon("csweb-op"));
@@ -111,7 +116,7 @@ final class Service {
             }
             Running r = new Running();
             running.put(id, r);
-            boolean exclusive = op.equals("load") || op.equals("unload") || op.equals("shutdown");
+            boolean exclusive = op.equals("load") || op.equals("unload") || op.equals("dns") || op.equals("shutdown");
             if (exclusive) {
                 List<Future<?>> before = opsSinceAdmin;
                 opsSinceAdmin = new ArrayList<>();
@@ -178,6 +183,8 @@ final class Service {
             case "providers":
                 for (MainAPI api : APIHolder.INSTANCE.getAllProviders()) provider(api);
                 return true;
+            case "dns":
+                return Main.configureDns(Integer.parseInt(Main.required(p, "value")), data);
             case "settings": {
                 BasePlugin plugin = plugins.get(new File(Main.required(p, "plugin")).getAbsolutePath());
                 if (plugin == null) throw new IllegalArgumentException("plugin not loaded: " + p.get("plugin"));

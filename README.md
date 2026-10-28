@@ -16,7 +16,7 @@ Il percorso completo richiede Linux, Docker, il webOS NDK e tempo/spazio per com
 tools/build-innohit-55.sh
 ```
 
-Il target package è `org.csweb.tv.legacy` versione candidata **0.6.1**; il titolo visualizzato nell'app è **CloudStream Hub - INNO-Hit 55**. Il file IPK viene creato sotto `external/webos-native-app-kit/build/webos-innohit55/dist/`. L'IPK pubblicato normalmente non contiene plugin di terze parti. Per un IPK personale aggiornabile (**0.6.2**) con StreamingCommunity, AnimeUnity e AnimeWorld già installati e abilitati al primo avvio, opt-in:
+Il target package è `org.csweb.tv.legacy` versione candidata **0.6.2**; il titolo visualizzato nell'app è **CloudStream Hub - INNO-Hit 55**. Il file IPK viene creato sotto `external/webos-native-app-kit/build/webos-innohit55/dist/`. L'IPK pubblicato normalmente non contiene plugin di terze parti. Per un IPK personale aggiornabile (**0.6.3**) con StreamingCommunity, AnimeUnity e AnimeWorld già installati e abilitati al primo avvio, opt-in:
 
 ```sh
 CSWEB_VERSION=0.6.2 CSWEB_BUNDLE_DOGIOR_PLUGINS=1 tools/build-innohit-55.sh
@@ -47,4 +47,6 @@ Dopo l'installazione raccogli log e risultati per **entrambe** le sigle, se poss
 - [Waydroid](https://github.com/waydroid/waydroid)
 - [doGior's Had Enough](https://github.com/doGior/doGiorsHadEnough)
 
-Questo progetto non è affiliato a LG, INNO-Hit, reCloudStream, Waydroid, doGior o agli autori di CSWeb TV. Il codice derivato è GPL-3.0-or-later; restano valide le licenze dei componenti e dei plugin di terze parti. Leggi [`UPSTREAM.md`](UPSTREAM.md) e gli avvisi sotto `runtime/licenses*` prima di redistribuire una build.
+Il player nativo webOS accetta link HTTP(S) diretti e un sottoinsieme dei deep link player Stremio; torrent/magnet richiedono lo Stremio Streaming Server e non sono supportati. L'handoff dal client Stremio su webOS non è stato verificato; dettagli e limiti in [`docs/research/stremio-webos-player.md`](docs/research/stremio-webos-player.md).
+
+Questo progetto non è affiliato a LG, INNO-Hit, reCloudStream, Waydroid, doGior, Stremio o agli autori di CSWeb TV. Il codice derivato è GPL-3.0-or-later, che **consente anche usi commerciali**: non è stata applicata una restrizione non commerciale perché upstream e kit sono già GPL e non è documentata l'autorizzazione a relicenziare quel codice. Le licenze dei componenti e dei plugin restano separate. Consulta [`LICENSING.md`](LICENSING.md), [`UPSTREAM.md`](UPSTREAM.md) e gli avvisi sotto `runtime/licenses*` prima di redistribuire una build.

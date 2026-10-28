@@ -4,6 +4,7 @@
 #include "app/deep_link.hpp"
 #include "player/link_priority.hpp"
 #include "runtime/runtime_launcher.hpp"
+#include "settings/dns_provider.hpp"
 #include "ui/screens/home_screen.hpp"
 #include "ui/screens/player_screen.hpp"
 #include "ui/screens/setup_screen.hpp"
@@ -82,21 +83,70 @@ void Application::on_start(wnk::app::Context &ctx) {
     else library_->load();
     services_.library = library_.get();
 
-    if (auto transport = ctx.http()) {
-        http_ = std::make_unique<wnk::net::HttpClient>(transport, ctx.pool(), ctx.dispatcher());
+    services_.dns_provider_id = settings::dns_provider(settings_->get_string(
+        settings::kDnsProvider, settings::kDefaultDnsProvider)).id;
+    app_transport_ = ctx.http();
+    if (app_transport_) {
+        std::string dns_error;
+        if (!settings::configure_dns_provider(app_transport_.get(), services_.dns_provider_id, &dns_error)) {
+            services_.dns_error = dns_error;
+            WNK_LOGW(kCat, "DNS-over-HTTPS unavailable for %s: %s", services_.dns_provider_id.c_str(), dns_error.c_str());
+        } else {
+            WNK_LOGI(kCat, "DNS provider: %s", settings::dns_provider(services_.dns_provider_id).label.c_str());
+        }
+        http_ = std::make_unique<wnk::net::HttpClient>(app_transport_, ctx.pool(), ctx.dispatcher());
         services_.http = http_.get();
         wnk::net::CurlOptions po;
         po.cookies = true;
         po.user_agent = player::kCloudStreamUserAgent;
         services_.player_http = wnk::net::make_curl_transport(po);
+        if (services_.player_http &&
+            !settings::configure_dns_provider(services_.player_http.get(), services_.dns_provider_id, &dns_error)) {
+            services_.dns_error = dns_error;
+            WNK_LOGW(kCat, "player DNS-over-HTTPS unavailable: %s", dns_error.c_str());
+        }
     }
+    services_.set_dns_provider = [this](const std::string &id, std::string *error) {
+        if (!app_transport_) {
+            if (error) *error = "HTTP transport is unavailable";
+            return false;
+        }
+        const std::string next = settings::dns_provider(id).id;
+        const std::string previous = services_.dns_provider_id;
+        std::string why;
+        if (!settings::configure_dns_provider(app_transport_.get(), next, &why)) {
+            if (error) *error = why;
+            services_.dns_error = why;
+            return false;
+        }
+        if (services_.player_http && !settings::configure_dns_provider(services_.player_http.get(), next, &why)) {
+            std::string ignored;
+            settings::configure_dns_provider(app_transport_.get(), previous, &ignored);
+            if (error) *error = why;
+            services_.dns_error = why;
+            return false;
+        }
+        settings_->set(settings::kDnsProvider, next);
+        services_.dns_provider_id = next;
+        services_.dns_error.clear();
+        if (runtime_) {
+            const int runtime_dns = settings::dns_provider(next).cloudstream_dns_value;
+            runtime_->request({{"op", "dns"}, {"value", runtime_dns}}, {}, [next](bool ok, const std::string &runtime_error) {
+                if (!ok) WNK_LOGW(kCat, "plugin runtime DNS update to %s failed: %s",
+                                  settings::dns_provider(next).label.c_str(), runtime_error.c_str());
+            });
+        }
+        WNK_LOGI(kCat, "DNS provider changed to %s", settings::dns_provider(next).label.c_str());
+        return true;
+    };
 
     const std::string rt_dir = runtime_dir(app_dir);
     WNK_LOGI(kCat, "csweb: app %s, runtime %s, tmp %s", app_dir.c_str(), rt_dir.c_str(), tmp.c_str());
     auto &dispatcher = ctx.dispatcher();
     runtime_ = std::make_unique<runtime::RuntimeClient>(
-        [rt_dir, tmp, data_dir](core::ChildSpec *spec, std::string *error) {
-            runtime::LaunchPlan plan = runtime::plan_runtime_launch(rt_dir, tmp, data_dir);
+        [this, rt_dir, tmp, data_dir](core::ChildSpec *spec, std::string *error) {
+            const int dns_value = settings::dns_provider(services_.dns_provider_id).cloudstream_dns_value;
+            runtime::LaunchPlan plan = runtime::plan_runtime_launch(rt_dir, tmp, data_dir, 256, dns_value);
             if (!plan.ok) {
                 *error = plan.error;
                 return false;
@@ -202,6 +252,23 @@ void Application::open_link(wnk::ui::Ui &ui, const std::string &params_json) {
     } else if (link.kind == DeepLink::Kind::Repository) {
         pending_repo_ = link.value;
         run_pending_search(ui);
+    } else if (link.kind == DeepLink::Kind::Play) {
+        PlayTarget target;
+        target.title = link.title.empty() ? "External stream" : link.title;
+        target.subtitle = "Stremio / webOS link";
+        target.data = link.value;
+        target.direct_position_ms = link.position_ms;
+        runtime::Link media;
+        media.name = target.title;
+        media.source = "External link";
+        media.url = link.value;
+        media.headers = link.headers;
+        target.direct_link = std::move(media);
+        for (const auto &[lang, url] : link.subtitles) target.direct_subtitles.push_back({lang, url, {}});
+        pending_play_ = std::move(target);
+        run_pending_search(ui);
+    } else if (link.kind == DeepLink::Kind::Unsupported) {
+        ui.toast(link.value, 6500);
     }
 }
 
@@ -238,6 +305,11 @@ void Application::run_pending_search(wnk::ui::Ui &ui) {
         const std::string url = std::move(pending_repo_);
         pending_repo_.clear();
         add_repository_from_link(ui, url);
+    }
+    if (pending_play_ && router_) {
+        PlayTarget target = std::move(*pending_play_);
+        pending_play_.reset();
+        router_->open_sources(ui, target);
     }
     if (pending_search_.empty() || plugins_->loading() || !router_) return;
     const std::string q = std::move(pending_search_);

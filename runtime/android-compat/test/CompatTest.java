@@ -303,6 +303,15 @@ public final class CompatTest {
         eq("plugin layout id via app context not found (as on Android)", true, threw);
     }
 
+    static void cloudStreamDnsPreference() throws Exception {
+        File dir = Files.createTempDirectory("csweb-dns-prefs").toFile();
+        HeadlessContext ctx = new HeadlessContext(dir, "com.lagradost.cloudstream3", 4);
+        SharedPreferences p = ctx.getSharedPreferences("com.lagradost.cloudstream3_preferences", 0);
+        eq("AdGuard DNS preference seeded", 4, p.getInt("dns_key", 0));
+        ctx.setDnsProvider(2);
+        eq("Cloudflare DNS preference updated", 2, p.getInt("dns_key", 0));
+    }
+
     public static void main(String[] args) throws Exception {
         resources();
         ui();
@@ -310,6 +319,7 @@ public final class CompatTest {
         uri();
         json();
         prefs();
+        cloudStreamDnsPreference();
         System.out.println("compat tests: " + passed + " passed, " + failed + " failed");
         if (failed > 0) System.exit(1);
     }

@@ -24,6 +24,6 @@ struct LaunchPlan {
 // (ctx.runtime_dir()). `data_dir`: plugin data (SharedPreferences of plugins). The service is started
 // with --serve; stderr goes to <tmp_dir>/runtime.log.
 LaunchPlan plan_runtime_launch(const std::string &runtime_dir, const std::string &tmp_dir,
-                               const std::string &data_dir, int heap_mb = 256);
+                               const std::string &data_dir, int heap_mb = 256, int cloudstream_dns_value = 4);
 
 }  // namespace csweb::runtime

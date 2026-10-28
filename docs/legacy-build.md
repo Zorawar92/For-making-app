@@ -41,6 +41,36 @@ Every change is opt-in. Without the new options each script and the app build ex
 | CI | `host`, `runtime`, `webos` unchanged | new `runtime-legacy`, `webos-legacy` jobs, `continue-on-error` |
 | release | the same files | legacy ipk + manifest added only when built **and** `runtime/licenses-armv7/` exists |
 
+## Toolchain locale per la build INNO-Hit
+
+I comandi seguenti sono per Ubuntu 22.04/24.04 x86_64. Installa gli strumenti host e Docker Engine; Docker deve poter scaricare immagini e pacchetti durante la prima build:
+
+```sh
+sudo apt update
+sudo apt install -y build-essential cmake git python3 pkg-config curl tar xz-utils bzip2 unzip zip \
+  binutils zlib1g-dev libsdl2-dev libgles-dev libegl-dev docker.io
+sudo systemctl enable --now docker
+# Alternativa al prefisso sudo nei comandi Docker: aggiungersi al gruppo docker, poi uscire e rientrare.
+docker info
+```
+
+Scarica l'SDK webOS per un host Linux x86_64 dalla release verificata `2026.08-webos` di
+[openlgtv/buildroot-nc4](https://github.com/openlgtv/buildroot-nc4/releases/tag/2026.08-webos), estrailo e rilocalizzalo:
+
+```sh
+mkdir -p "$HOME/webos-ndk"
+curl -fL 'https://github.com/openlgtv/buildroot-nc4/releases/download/2026.08-webos/arm-webos-linux-gnueabi_sdk-buildroot-x86_64.tar.gz' \
+  -o /tmp/webos-ndk.tar.gz
+tar -xzf /tmp/webos-ndk.tar.gz -C "$HOME/webos-ndk"
+export WEBOS_NDK="$HOME/webos-ndk/arm-webos-linux-gnueabi_sdk-buildroot"
+"$WEBOS_NDK/relocate-sdk.sh"
+echo 'export WEBOS_NDK="$HOME/webos-ndk/arm-webos-linux-gnueabi_sdk-buildroot"' >> "$HOME/.bashrc"
+test -f "$WEBOS_NDK/share/buildroot/toolchainfile.cmake"
+"$WEBOS_NDK/bin/arm-webos-linux-gnueabi-gcc" --version
+```
+
+Per un host Linux ARM64 scarica l'asset `arm-webos-linux-gnueabi_sdk-buildroot-aarch64.tar.gz` della stessa release. Dopo aver clonato il repository, verifica i requisiti con `external/webos-native-app-kit/tools/doctor.sh`. Il JDK host non serve: i passaggi runtime che lo richiedono girano in container. Su host x86_64 il bootstrap ART armv7 richiede anche emulazione Docker/binfmt; prova `docker run --rm --platform linux/arm/v7 alpine:edge uname -m`. La compilazione ART può essere molto lunga: le alternative documentate con runner ARM o artifact sono nella sezione successiva.
+
 ## Building it
 
 ```
@@ -53,6 +83,14 @@ cmake --build build/webos-legacy --target csweb-tv-ipk
 ```
 
 Configure runs `tools/build-libcurl-webos.sh` once (cached by its inputs), like the kit's FFmpeg.
+
+### App DNS
+
+AdGuard's non-filtering DNS-over-HTTPS endpoint is the first-run default, persisted in DB8. Settings
+also offers Cloudflare, Google Public DNS, Quad9, DNS.WATCH, DNS.SB, Canadian Shield and System DNS.
+The selection applies to native curl and the CloudStream OkHttp client inside ART; it does not change
+the TV's global resolver. The legacy package's bundled libcurl 8.23.0 supports `CURLOPT_DOH_URL`.
+DoH choices require a runtime libcurl that accepts this option.
 
 ### Rebuilding ART against current wolfSSL
 

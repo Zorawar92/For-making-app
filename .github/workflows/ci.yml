@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Runs host tests on pull requests and pushes. Expensive runtime/webOS package jobs run only for a manual package run or a release workflow_call.
+# Runs host tests on pull requests and pushes. Expensive runtime/webOS package jobs run for a manual package run,
+# a release workflow_call, or an explicitly marked push commit ([build-innohit]).
 #   host:  kit + apps built for Linux (host-debug and host-asan), all tests (kit, apps, project tools)
 #   runtime: the plugin runtime (runtime-aarch64) from the pinned inputs (tools/build-runtime.sh),
 #            cached until runtime/ or its inputs change
@@ -108,7 +109,7 @@ jobs:
 
   runtime:
     name: Plugin runtime (aarch64)
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[build-innohit]')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
@@ -205,7 +206,7 @@ jobs:
   # ---- legacy package (docs/legacy-build.md): nothing above depends on these jobs -------------------------
   art-legacy:
     name: ART package (armv7, native ARM)
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[build-innohit]')) }}
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 120
     continue-on-error: true

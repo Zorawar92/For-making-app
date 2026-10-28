@@ -22,7 +22,7 @@ endif ()
 if (CSWEB_INNOHIT_55)
     set(CSWEB_TITLE "CloudStream Hub - INNO-Hit 55")
 endif ()
-set(CSWEB_VERSION 0.6.1 CACHE STRING "App version, three integers (the release workflow sets it)")
+set(CSWEB_VERSION 0.6.2 CACHE STRING "App version, three integers (the release workflow sets it)")
 set(CSWEB_BUNDLED_PLUGINS_DIR "" CACHE PATH "Optional local-only bundled-plugins directory for personal builds")
 get_filename_component(_csweb_root "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
 
@@ -65,6 +65,7 @@ add_library(csweb_core STATIC
         src/plugins/plugin_store.cpp
         src/plugins/repository.cpp
         src/profiles/profiles.cpp
+        src/settings/dns_provider.cpp
         src/settings/preferences.cpp
         src/settings/settings_store.cpp
         src/runtime/episode_groups.cpp
@@ -81,7 +82,7 @@ endif ()
 
 # ---- tests (host) -----------------------------------------------------------------------------------
 if (WNK_BUILD_TESTS)
-    foreach (t sha256 zip_check repository runtime_types plugin_store runtime_client episode_groups redact deep_link library dir_snapshot preferences provider_test profiles http_url scrub)
+    foreach (t sha256 zip_check repository runtime_types plugin_store runtime_client episode_groups redact deep_link library dir_snapshot dns_provider preferences provider_test profiles http_url scrub)
         add_executable(csweb_test_${t} tests/test_${t}.cpp)
         target_include_directories(csweb_test_${t} PRIVATE "${PROJECT_SOURCE_DIR}/tests/unit")
         target_compile_definitions(csweb_test_${t} PRIVATE CSWEB_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures")

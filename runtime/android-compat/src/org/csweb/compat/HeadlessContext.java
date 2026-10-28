@@ -16,8 +16,19 @@ public final class HeadlessContext extends Context {
     private final String packageName;
 
     public HeadlessContext(File dataDir, String packageName) {
+        this(dataDir, packageName, 4); // CloudStream's AdGuard DNS selection
+    }
+
+    public HeadlessContext(File dataDir, String packageName, int dnsProvider) {
         this.dataDir = dataDir;
         this.packageName = packageName;
+        setDnsProvider(dnsProvider);
+    }
+
+    /** Keep CloudStream's OkHttp client on the same DNS choice as the native app and player. */
+    public void setDnsProvider(int provider) {
+        getSharedPreferences(packageName + "_preferences", Context.MODE_PRIVATE)
+                .edit().putInt("dns_key", provider).apply();
     }
 
     @Override public SharedPreferences getSharedPreferences(String name, int mode) {

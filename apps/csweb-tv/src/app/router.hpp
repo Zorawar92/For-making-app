@@ -13,7 +13,9 @@
 
 #include "wnk/ui/navigation.hpp"
 
+#include <cstdint>
 #include <functional>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -34,6 +36,10 @@ struct PlayTarget {
     std::string subtitle;   // "S2 · E4 Low Tide", empty for a movie
     std::string poster_url;
     std::string details_url;  // the LoadResponse url, the key for resume and history
+    // Optional external HTTP(S) media hand-off (Stremio URL stream or plain webOS launch URL).
+    std::optional<runtime::Link> direct_link;
+    std::vector<runtime::Subtitle> direct_subtitles;
+    int64_t direct_position_ms = 0;
     int season = 0, episode = 0;
 };
 
