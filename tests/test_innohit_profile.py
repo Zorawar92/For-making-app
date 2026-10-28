@@ -11,7 +11,7 @@ class InnoHitProfileTest(unittest.TestCase):
         self.assertIn('option(CSWEB_INNOHIT_55', cmake)
         self.assertIn('set(CSWEB_LEGACY ON CACHE BOOL', cmake)
         self.assertIn('set(CSWEB_TITLE "CloudStream Hub - INNO-Hit 55")', cmake)
-        self.assertIn('set(CSWEB_VERSION 0.6.1 CACHE STRING', cmake)
+        self.assertIn('set(CSWEB_VERSION 0.6.2 CACHE STRING', cmake)
         self.assertIn('#define CSWEB_WINDOW_TITLE "CloudStream Hub - INNO-Hit 55"', main)
 
     def test_targeted_build_and_ci_use_the_profile(self):

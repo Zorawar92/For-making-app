@@ -16,7 +16,7 @@ Il percorso completo richiede Linux, Docker, il webOS NDK e tempo/spazio per com
 tools/build-innohit-55.sh
 ```
 
-Il target package è `org.csweb.tv.legacy` versione candidata **0.6.1**; il titolo visualizzato nell'app è **CloudStream Hub - INNO-Hit 55**. Il file IPK viene creato sotto `external/webos-native-app-kit/build/webos-innohit55/dist/`. L'IPK pubblicato normalmente non contiene plugin di terze parti. Per un IPK personale aggiornabile (**0.6.2**) con StreamingCommunity, AnimeUnity e AnimeWorld già installati e abilitati al primo avvio, opt-in:
+Il target package è `org.csweb.tv.legacy` versione candidata **0.6.2**; il titolo visualizzato nell'app è **CloudStream Hub - INNO-Hit 55**. Il file IPK viene creato sotto `external/webos-native-app-kit/build/webos-innohit55/dist/`. L'IPK pubblicato normalmente non contiene plugin di terze parti. Per un IPK personale aggiornabile (**0.6.3**) con StreamingCommunity, AnimeUnity e AnimeWorld già installati e abilitati al primo avvio, opt-in:
 
 ```sh
 CSWEB_VERSION=0.6.2 CSWEB_BUNDLE_DOGIOR_PLUGINS=1 tools/build-innohit-55.sh
