@@ -191,6 +191,13 @@ bool PlayerScreen::on_back(Ui &) {
 }
 
 void PlayerScreen::load_links() {
+    if (target_.direct_link) {
+        links_.push_back(*target_.direct_link);
+        subtitles_ = target_.direct_subtitles;
+        loading_ = false;
+        if (Ui *u = this->ui()) start_best(*u);
+        return;
+    }
     loading_ = true;
     request_ = s_.runtime->request(
         {{"op", "links"}, {"provider", target_.provider}, {"url", target_.data}, {"withHeaders", true}},
@@ -304,7 +311,9 @@ void PlayerScreen::play_link(Ui &ui, size_t index) {
             // GeneratorPlayer.getPos: continue where the viewer stopped (not past 95 %).
             if (!resumed_) {
                 resumed_ = true;
-                const int64_t start = s_.library->get().start_position_ms(target_.provider, target_.data);
+                const int64_t start = target_.direct_link
+                                          ? target_.direct_position_ms
+                                          : s_.library->get().start_position_ms(target_.provider, target_.data);
                 if (start > 0) {
                     WNK_LOGI(kCat, "player: resuming at %lld s", static_cast<long long>(start / 1000));
                     controller_->seek(start * 1000);

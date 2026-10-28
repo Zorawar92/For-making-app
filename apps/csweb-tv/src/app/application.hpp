@@ -18,6 +18,7 @@
 #include "wnk/app/app.hpp"
 
 #include <memory>
+#include <optional>
 
 namespace csweb::app {
 
@@ -39,6 +40,7 @@ class Application : public wnk::app::Delegate {
     std::unique_ptr<plugins::PluginManager> plugins_;
     std::unique_ptr<plugins::PluginDataStore> plugin_data_;
     std::unique_ptr<wnk::net::HttpClient> http_;
+    std::shared_ptr<wnk::net::HttpTransport> app_transport_;
     std::unique_ptr<Router> router_;
     std::unique_ptr<ui::PluginDialogHost> dialogs_;
     std::unique_ptr<core::StallSampler> stalls_;
@@ -49,6 +51,7 @@ class Application : public wnk::app::Delegate {
     std::string pending_search_;  // a cloudstreamsearch:// query waiting for the plugins to load
     bool choosing_profile_ = false;  // the start-up profile picker is open
     std::string pending_repo_;    // a repository link waiting for the stored repositories to be read
+    std::optional<PlayTarget> pending_play_;  // a direct/Stremio link waiting for setup/profile selection
     core::Signal::Subscription plugins_sub_;
     double since_data_save_s_ = 0;
     wnk::async::Lifetime life_;

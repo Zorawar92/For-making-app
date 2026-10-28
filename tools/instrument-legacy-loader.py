@@ -164,7 +164,7 @@ def instrument(source, output):
         "        BasePlugin plugin = (BasePlugin) pluginClass.getDeclaredConstructor().newInstance();",
         "class.initialize_and_construct")
     main = before_after(main,
-        '        HeadlessContext app = new HeadlessContext(data, "com.lagradost.cloudstream3");', "context")
+        '        HeadlessContext app = new HeadlessContext(data, "com.lagradost.cloudstream3", dnsProviderValue);', "context")
     main = once(main, "        if (manifest.getRequiresResources()) {",
         '        legacyLoadStage("resources.begin");\n        if (manifest.getRequiresResources()) {')
     main = once(main, "        try {\n            if (plugin instanceof Plugin) {\n                ((Plugin) plugin).load(",

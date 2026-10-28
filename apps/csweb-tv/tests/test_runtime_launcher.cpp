@@ -57,6 +57,9 @@ TEST("compiler_bootclasspath_matches_vm_and_preserves_order") {
     const std::string bcp = f.tmp + "/rt/usr/lib/java/dex/art/second.jar:" +
                             f.tmp + "/rt/usr/lib/java/dex/art/first.jar";
     CHECK(std::find(plan.spec.args.begin(), plan.spec.args.end(), "-Xbootclasspath:" + bcp) != plan.spec.args.end());
+    const auto dns_arg = std::find(plan.spec.args.begin(), plan.spec.args.end(), "--dns");
+    CHECK(dns_arg != plan.spec.args.end());
+    CHECK_EQ(*(dns_arg + 1), std::string("4"));
 #ifdef CSWEB_LEGACY
     const auto compiler_env = boot_env(plan);
     CHECK_EQ(compiler_env.size(), size_t(1));
@@ -67,6 +70,15 @@ TEST("compiler_bootclasspath_matches_vm_and_preserves_order") {
     CHECK_EQ(plan.aot_status, std::string("ok"));
 #endif
     CHECK_EQ(plan.spec.env.front(), "PATH=" + f.tmp + "/rt/bin");
+}
+
+TEST("launch_passes_selected_cloudstream_dns_value") {
+    Fixture f;
+    const auto plan = csweb::runtime::plan_runtime_launch(f.installed, f.tmp, f.data, 256, 2);
+    CHECK(plan.ok);
+    const auto dns_arg = std::find(plan.spec.args.begin(), plan.spec.args.end(), "--dns");
+    CHECK(dns_arg != plan.spec.args.end());
+    CHECK_EQ(*(dns_arg + 1), std::string("2"));
 }
 
 TEST("imageless_launch_has_no_invented_bootclasspath") {

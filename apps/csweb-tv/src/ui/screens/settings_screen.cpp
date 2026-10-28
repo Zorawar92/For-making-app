@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "ui/screens/settings_screen.hpp"
 
+#include "settings/dns_provider.hpp"
 #include "settings/preferences.hpp"
 #include "ui/dialogs/multi_select.hpp"
 #include "ui/theme/theme.hpp"
@@ -75,6 +76,25 @@ SettingsScreen::SettingsScreen(app::Services &s) : Screen("Settings"), s_(s) {
     media_->set_description("Which sources Home and Search use");
     media_->name = "settings.media";
     list.add<ValueRow>("Test extensions", "", [this](Ui &ui) { s_.router->open_provider_tests(ui); }).name = "settings.tests";
+
+    section(list, "Network");
+    {
+        std::vector<std::string> dns_names;
+        for (const auto &provider : settings::dns_providers()) dns_names.push_back(provider.label);
+        auto &dns = list.add<Choice>("DNS provider", dns_names,
+                                     settings::dns_provider_index(s_.dns_provider_id),
+                                     [this](Ui &ui, int index) {
+            const auto &provider = settings::dns_providers()[static_cast<size_t>(index)];
+            std::string error;
+            if (!s_.set_dns_provider || !s_.set_dns_provider(provider.id, &error)) {
+                ui.toast("DNS setting was not applied: " +
+                         (error.empty() ? std::string("network transport unavailable") : error));
+            }
+        });
+        dns.set_description("AdGuard's non-filtering DNS over HTTPS is the default. DNS services can see your lookups; System DNS disables DoH.");
+        dns.name = "settings.dns";
+        if (!s_.dns_error.empty()) dns.set_description("DNS setup issue: " + s_.dns_error);
+    }
 
     section(list, "Player");
     {

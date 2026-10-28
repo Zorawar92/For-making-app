@@ -54,6 +54,14 @@ cmake --build build/webos-legacy --target csweb-tv-ipk
 
 Configure runs `tools/build-libcurl-webos.sh` once (cached by its inputs), like the kit's FFmpeg.
 
+### App DNS
+
+AdGuard's non-filtering DNS-over-HTTPS endpoint is the first-run default, persisted in DB8. Settings
+also offers Cloudflare, Google Public DNS, Quad9, DNS.WATCH, DNS.SB, Canadian Shield and System DNS.
+The selection applies to native curl and the CloudStream OkHttp client inside ART; it does not change
+the TV's global resolver. The legacy package's bundled libcurl 8.23.0 supports `CURLOPT_DOH_URL`.
+DoH choices require a runtime libcurl that accepts this option.
+
 ### Rebuilding ART against current wolfSSL
 
 Alpine edge's available armv7 `art_standalone-0_git20251009-r2` needs `libwolfssl.so.45`, while

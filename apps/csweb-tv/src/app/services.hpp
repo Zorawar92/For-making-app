@@ -16,6 +16,9 @@
 #include "wnk/media/device_caps.hpp"
 #include "wnk/net/http.hpp"
 
+#include <functional>
+#include <string>
+
 namespace csweb::app {
 
 class Router;
@@ -29,6 +32,9 @@ struct Services {
     library::LibraryStore *library = nullptr;
     Router *router = nullptr;
     wnk::net::HttpClient *http = nullptr;     // null without a network stack
+    std::string dns_provider_id = "adguard";
+    std::string dns_error;
+    std::function<bool(const std::string &, std::string *)> set_dns_provider;
     // The player's own transport: it keeps the cookies streaming servers set (Set-Cookie on a
     // playlist, checked on segments), as CloudStream's player (Cronet) does. Null: the app's.
     std::shared_ptr<wnk::net::HttpTransport> player_http;

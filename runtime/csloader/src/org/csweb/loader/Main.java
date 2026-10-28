@@ -58,6 +58,7 @@ public final class Main {
     private static final PrintStream OUT = System.out;
     static final Map<String, String> args = new LinkedHashMap<>();
     static HeadlessContext appContext;
+    static int dnsProviderValue = 4; // CloudStream's AdGuard DNS value; overridden by native app
     /** The service request the current thread works for; its id tags every event the thread emits. */
     static final ThreadLocal<String> REQUEST = new ThreadLocal<>();
     /** The coroutine of each running service request, for cancellation. */
@@ -81,6 +82,7 @@ public final class Main {
                 if (!argv[i].startsWith("--")) throw new IllegalArgumentException("bad argument " + argv[i]);
                 args.put(argv[i].substring(2), argv[i + 1]);
             }
+            dnsProviderValue = Integer.parseInt(args.getOrDefault("dns", "4"));
             if (args.containsKey("serve")) {
                 Service.run(args);  // never returns
             }
@@ -160,6 +162,36 @@ public final class Main {
         return ok;
     }
 
+    /** Update CloudStream's DNS preference and rebuild its shared OkHttp client. */
+    static boolean configureDns(int value, File data) throws Exception {
+        if (value != 0 && value != 1 && value != 2 && value != 4 && value != 5 && value != 6 && value != 7 && value != 8) {
+            throw new IllegalArgumentException("unsupported CloudStream DNS value " + value);
+        }
+        dnsProviderValue = value;
+        if (appContext == null) appContext = new HeadlessContext(data, "com.lagradost.cloudstream3", value);
+        else appContext.setDnsProvider(value);
+        initCloudStreamClient(appContext);
+        return true;
+    }
+
+    /** Requests.initClient is a Kotlin extension; reflect it so the loader has no compile-time dependency on app internals. */
+    private static void initCloudStreamClient(HeadlessContext context) throws Exception {
+        Class<?> appHolder = Class.forName("com.lagradost.cloudstream3.MainActivityKt");
+        Object requests = appHolder.getMethod("getApp").invoke(null);
+        Class<?> helper = Class.forName("com.lagradost.cloudstream3.network.RequestsHelperKt");
+        Method init = null;
+        for (Method method : helper.getMethods()) {
+            Class<?>[] params = method.getParameterTypes();
+            if (method.getName().equals("initClient") && params.length == 2 &&
+                    params[0].isInstance(requests) && params[1].isInstance(context)) {
+                init = method;
+                break;
+            }
+        }
+        if (init == null) throw new NoSuchMethodException("CloudStream Requests.initClient(Context)");
+        init.invoke(null, requests, context);
+    }
+
     /**
      * The parts of CommonActivity.init that plugins rely on: NewPipe gets CloudStream's OkHttp downloader
      * (YouTube plugins search and load through NewPipe). Reflection, as these classes are not on the
@@ -203,8 +235,9 @@ public final class Main {
                     "class", manifest.getPluginClassName(), "base", plugin instanceof Plugin ? "Plugin" : "BasePlugin",
                     "requiresResources", manifest.getRequiresResources(), "sha256", hash));
         }
-        HeadlessContext app = new HeadlessContext(data, "com.lagradost.cloudstream3");
+        HeadlessContext app = new HeadlessContext(data, "com.lagradost.cloudstream3", dnsProviderValue);
         appContext = app;
+        initCloudStreamClient(app);
         if (manifest.getRequiresResources()) {
             // PluginManager.loadPlugin: AssetManager by reflection, addAssetPath(<.cs3>), then Resources over it.
             try {

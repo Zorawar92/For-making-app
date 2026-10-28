@@ -67,6 +67,10 @@ the comment at the top of each screen names the classes. Known differences:
   sources and quality profiles are not built yet. Torrent and magnet links are listed but cannot
   play (CloudStream's torrent server is not available).
 - Plugin settings take effect by reloading the plugin when its settings dialog ends.
+- webOS launch parameters can open a direct HTTP(S) URL or a Stremio `stremio:///player/...` link carrying a direct URL stream; the hand-off keeps title, request headers, subtitle URLs and resume position. Magnet/torrent and Stremio add-on/server flows are unsupported. Details: `docs/research/stremio-webos-player.md`.
+- Network settings use AdGuard's non-filtering DNS-over-HTTPS endpoint by default, with Cloudflare,
+  Google, Quad9, DNS.WATCH, DNS.SB, Canadian Shield and System DNS as alternatives. The setting applies
+  to the app's curl transports and CloudStream's OkHttp client in ART; it does not change TV-wide DNS.
 - Plugin data (SharedPreferences, files) lives on tmpfs while the runtime runs and is copied to
   DB8 (blob "plugin-data", 2 MiB at most) and restored before the runtime starts. Plugin caches are
   not kept. Settings, library, repositories and plugins are in DB8.

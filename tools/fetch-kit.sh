@@ -25,6 +25,7 @@ if [[ ! -d "$DIR/.git" ]]; then
 fi
 if [[ "$(git -C "$DIR" rev-parse -q --verify HEAD 2>/dev/null || true)" == "$KIT_COMMIT" ]]; then
     echo "fetch-kit: $DIR at $KIT_COMMIT"
+    python3 "$ROOT/tools/patch-kit-doh.py" "$DIR"
     exit 0
 fi
 if [[ -n "$(git -C "$DIR" status --porcelain --untracked-files=no 2>/dev/null)" ]]; then
@@ -34,3 +35,4 @@ fi
 git -C "$DIR" fetch -q --depth 1 origin "$KIT_COMMIT"
 git -C "$DIR" -c advice.detachedHead=false checkout -q "$KIT_COMMIT"
 echo "fetch-kit: $DIR at $KIT_COMMIT"
+python3 "$ROOT/tools/patch-kit-doh.py" "$DIR"

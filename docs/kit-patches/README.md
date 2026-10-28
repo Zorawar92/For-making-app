@@ -1,8 +1,10 @@
 # Kit patches
 
 The project builds on Native App Kit `7fe49ab791a33fd135aec349c0929c959d99c146` (upstream `main`,
-2026-10-24) **without local changes**. `external/webos-native-app-kit` is a plain checkout of that commit,
-made or checked by `tools/fetch-kit.sh` (which holds the pinned commit; CI uses it too):
+2026-10-24). `external/webos-native-app-kit` is checked out at that pinned commit by
+`tools/fetch-kit.sh`; afterward it applies the app-owned DoH overlay in `tools/patch-kit-doh.py`.
+The ignored kit source remains uncommitted; the overlay is versioned so local builds and CI apply it
+consistently, and it fails if expected source anchors change:
 
     tools/fetch-kit.sh
 
@@ -24,6 +26,15 @@ The notes stay as the record of why each change was needed and how it was tested
 `*.patch` files were removed when the project moved to `5f91c56`; they are in this repository's
 history. The upstream versions differ slightly from them: 0001 lives in `cmake/ExtraApps.cmake` with
 path checks, 0002's CMake comment is more precise, and every one has more tests.
+
+## App-owned DNS-over-HTTPS overlay
+
+The overlay extends the kit's shared curl transport with runtime DoH configuration. CSWeb applies it
+to the app transport (plugin/repository requests and images) and the separate player transport; it
+also passes CloudStream's `dns_key` choice to the ART runtime to configure OkHttp. Curl's
+`CURLOPT_DOH_URL` uses a pinned bootstrap entry for each resolver; idle multi handles are discarded
+when the choice changes. Runtime libcurl is probed before enabling DoH. The INNO-Hit legacy package
+bundles libcurl 8.23.0; no IPK or target-TV validation has been done for the overlay.
 
 A future kit change goes here again as `NNNN-name.md` + `NNNN-name.patch` against the commit above,
 and upstream as a pull request.
