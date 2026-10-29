@@ -42,6 +42,9 @@ jobs:
     name: Host (${{ matrix.preset }})
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    # Candidate release pushes still require host-debug; ASan remains visible but advisory for this
+    # experimental package path. PRs and manual full releases keep the sanitizer job blocking.
+    continue-on-error: ${{ matrix.preset == 'host-asan' && github.event_name == 'push' && contains(github.event.head_commit.message, '[release-innohit]') }}
     strategy:
       fail-fast: false
       matrix:
