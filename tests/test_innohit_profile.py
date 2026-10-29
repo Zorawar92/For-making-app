@@ -41,7 +41,8 @@ class InnoHitProfileTest(unittest.TestCase):
             "continue-on-error: ${{ github.event_name != 'workflow_call' && "
             "!contains(github.event.head_commit.message, '[release-innohit]') }}"
         )
-        self.assertEqual(ci.count(required_for_release), 4)
+        self.assertEqual(ci.count(required_for_release), 3)
+        self.assertIn("continue-on-error: ${{ github.event_name != 'workflow_call' }}", ci)
         self.assertIn('name: innohit-55-webos-hub-ipk', manual_release)
         self.assertIn('expected exactly one INNO-Hit IPK', manual_release)
         self.assertIn('workflows: [CI]', automatic_release)
