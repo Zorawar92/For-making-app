@@ -32,11 +32,17 @@ class InnoHitProfileTest(unittest.TestCase):
         automatic_release = (ROOT / ".github/workflows/publish-prebuilt-ipk.yml").read_text()
 
         self.assertIn("'[release-innohit]'", ci)
+        self.assertIn(
+            "continue-on-error: ${{ matrix.preset == 'host-asan' && github.event_name == 'push' && "
+            "contains(github.event.head_commit.message, '[release-innohit]') }}",
+            ci,
+        )
         required_for_release = (
             "continue-on-error: ${{ github.event_name != 'workflow_call' && "
             "!contains(github.event.head_commit.message, '[release-innohit]') }}"
         )
-        self.assertEqual(ci.count(required_for_release), 4)
+        self.assertEqual(ci.count(required_for_release), 3)
+        self.assertIn("continue-on-error: ${{ github.event_name != 'workflow_call' }}", ci)
         self.assertIn('name: innohit-55-webos-hub-ipk', manual_release)
         self.assertIn('expected exactly one INNO-Hit IPK', manual_release)
         self.assertIn('workflows: [CI]', automatic_release)

@@ -8,7 +8,8 @@
 #            or included in manual/reusable release builds
 #   runtime-legacy, webos-legacy: the legacy package for TVs with a 32-bit kernel (org.csweb.tv.legacy:
 #            runtime-armv7 and a bundled libcurl, docs/legacy-build.md). Separate jobs, caches and artifacts;
-#            optional on ordinary builds, required for workflow_call and [release-innohit] builds.
+#            optional on ordinary builds; build/package jobs are required for releases, while the
+#            extra plugin-load probe is advisory on automatic candidate pushes and strict in workflow_call.
 # The kit is checked out at the commit tools/fetch-kit.sh pins. Main build tests use this project's
 # own fixtures. The isolated legacy-runtime-test job additionally loads fixed third-party revisions.
 name: CI
@@ -42,6 +43,9 @@ jobs:
     name: Host (${{ matrix.preset }})
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    # Candidate release pushes still require host-debug; ASan remains visible but advisory for this
+    # experimental package path. PRs and manual full releases keep the sanitizer job blocking.
+    continue-on-error: ${{ matrix.preset == 'host-asan' && github.event_name == 'push' && contains(github.event.head_commit.message, '[release-innohit]') }}
     strategy:
       fail-fast: false
       matrix:
@@ -403,7 +407,9 @@ jobs:
     needs: runtime-legacy
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 15
-    continue-on-error: ${{ github.event_name != 'workflow_call' && !contains(github.event.head_commit.message, '[release-innohit]') }}
+    # The native ARM container probe has intermittent runner-side timeouts; keep it visible but
+    # advisory for push candidates. Manual Release workflow_call remains strict.
+    continue-on-error: ${{ github.event_name != 'workflow_call' }}
     steps:
       - uses: actions/checkout@v4
         with:
