@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Publish the INNO-Hit IPK produced by the successful main-branch CI run that explicitly requested a release.
 # The artifact is selected by this workflow_run event's run ID; no commit-message run IDs/tags or stale
-# artifacts are accepted. Public plugin redistribution is intentionally disabled until licences are verified.
+# artifacts are accepted. Plugin archives are bundled with attribution and pinned hashes per maintainer direction.
 name: Release latest INNO-Hit IPK
 
 on:
@@ -51,10 +51,8 @@ jobs:
           message = run.get("head_commit", {}).get("message", "")
           assert "[release-innohit]" in message, "missing explicit release marker"
           assert "[build-innohit]" in message, "release marker must request a fresh legacy package build"
-          assert "[build-innohit-plugins]" not in message, (
-              "public release blocked: plugin bundle requested without verified redistribution terms"
-          )
-          print(f"Verified successful CI run {run_id} for {source_sha}; no plugin bundle requested.")
+          assert "[build-innohit-plugins]" in message, "release commit must request the plugin bundle"
+          print(f"Verified successful CI run {run_id} for {source_sha}; plugin bundle requested.")
           PY
 
       - name: Download the INNO-Hit package from this exact CI run
@@ -82,10 +80,15 @@ jobs:
             exit 1
           fi
           test -s runtime/licenses-armv7/packages.tsv || {
-            echo "::error::missing armv7 runtime license inventory; refusing to publish the IPK"
+            echo "::error::missing armv7 runtime license inventory"
             exit 1
           }
-          (cd dist-legacy && sha256sum "$ipk" > SHA256SUMS)
+          test -s dist-legacy/plugins-manifest.json || {
+            echo "::error::plugin provenance missing; release builds must bundle the selected community plugins"
+            exit 1
+          }
+          python3 tools/verify-innohit-plugin-ipk.py --ipk "$ipk" --manifest dist-legacy/plugins-manifest.json
+          (cd dist-legacy && sha256sum "$ipk" plugins-manifest.json > SHA256SUMS)
           python3 - "$version" "$ipk" <<'PY'
           import hashlib, json, os, pathlib, sys
           version, ipk = sys.argv[1:]
@@ -98,7 +101,7 @@ jobs:
               "type": "native",
               "title": "CloudStream Hub - INNO-Hit 55",
               "appDescription": "Experimental native webOS build for INNO-Hit IH55UWB (IH55UWB4 not tested). "
-                                "No third-party repositories, plugins or content are preinstalled.",
+                                "Includes StreamingCommunity, AnimeUnity and AnimeWorld plugin archives.",
               "iconUri": f"https://raw.githubusercontent.com/{repo}/{sha}/apps/csweb-tv/packaging/icons/largeIcon.png",
               "sourceUrl": f"https://github.com/{repo}",
               "rootRequired": False,
@@ -127,11 +130,12 @@ jobs:
           CloudStream Hub $VERSION INNO-Hit package built and checked by CI from commit \`$SOURCE_SHA\` (run [#$RUN_ID](https://github.com/$GITHUB_REPOSITORY/actions/runs/$RUN_ID)).
 
           **IPK:** \`org.csweb.tv.legacy_${VERSION}_arm.ipk\`
+          **Plugin provenance:** \`plugins-manifest.json\`
           **SHA-256:** \`$sha\`
 
-          This is an experimental native webOS build for IH55UWB; IH55UWB4 and device behavior are not verified by CI. CI tests are offline and do not establish provider search, network access, playback, or TV compatibility.
+          This experimental native webOS build includes the pinned StreamingCommunity, AnimeUnity and AnimeWorld plugin archives. Their source revision and SHA-256 hashes are listed in the attached provenance manifest; the community plugins retain their own attribution and terms.
 
-          No third-party \`.cs3\` plugins are included because their redistribution permissions have not been verified. This release uses the IPK from the exact successful CI run linked above, not an older artifact.
+          Targets IH55UWB; IH55UWB4 and device behavior are not verified by CI. CI tests are offline and do not establish provider search, network access, playback, or TV compatibility. This release uses the IPK from the exact successful CI run linked above, not an older artifact.
           EOF
 
       - name: Create pre-release with the exact CI artifact
@@ -143,4 +147,4 @@ jobs:
             --title "CloudStream Hub $VERSION (candidate)" \
             --notes-file notes.md \
             "dist-legacy/org.csweb.tv.legacy_${VERSION}_arm.ipk" \
-            dist-legacy/org.csweb.tv.legacy.manifest.json dist-legacy/SHA256SUMS
+            dist-legacy/org.csweb.tv.legacy.manifest.json dist-legacy/plugins-manifest.json dist-legacy/SHA256SUMS

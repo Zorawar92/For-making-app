@@ -3,8 +3,8 @@
 #   1. checks the version (three integers, as webOS requires) and that tag v<version> is new
 #   2. runs the whole CI (ci.yml) on this commit with that version; release jobs require the legacy
 #      ARMv7 build, offline plugin-load check and both package artifacts
-#   3. creates the GitHub release v<version> on this commit with both IPKs, checksums and manifests
-# Public releases contain no third-party .cs3 files until redistribution permissions are verified.
+#   3. creates the GitHub release v<version> on this commit with both IPKs, plugin provenance, checksums and manifests
+# The INNO-Hit IPK includes the pinned community plugin bundle requested by the maintainer.
 # Releases are made from main only. CI does not test network search, playback or the app on a TV.
 name: Release
 
@@ -58,6 +58,7 @@ jobs:
     uses: ./.github/workflows/ci.yml
     with:
       version: ${{ inputs.version }}
+      bundle_plugins: true
 
   release:
     name: Publish the release
@@ -132,10 +133,15 @@ jobs:
             exit 1
           fi
           test -s runtime/licenses-armv7/packages.tsv || {
-            echo "::error::missing armv7 runtime license inventory; refusing to publish the IPK"
+            echo "::error::missing armv7 runtime license inventory"
             exit 1
           }
-          (cd dist-legacy && sha256sum "$expected" > SHA256SUMS-legacy)
+          test -s dist-legacy/plugins-manifest.json || {
+            echo "::error::plugin provenance missing from the manual release build"
+            exit 1
+          }
+          python3 tools/verify-innohit-plugin-ipk.py --ipk "$ipk" --manifest dist-legacy/plugins-manifest.json
+          (cd dist-legacy && sha256sum "$expected" plugins-manifest.json > SHA256SUMS-legacy)
           python3 - "$VERSION" <<'EOF'
           import hashlib, json, os, sys
           version = sys.argv[1]
@@ -149,7 +155,7 @@ jobs:
               "type": "native",
               "title": "CloudStream Hub - INNO-Hit 55",
               "appDescription": "Experimental native webOS build for INNO-Hit IH55UWB (IH55UWB4 not tested). "
-                                "No third-party repositories, plugins or content are preinstalled.",
+                                "Includes StreamingCommunity, AnimeUnity and AnimeWorld plugin archives.",
               "iconUri": f"https://raw.githubusercontent.com/{repo}/{sha}/apps/csweb-tv/packaging/icons/largeIcon.png",
               "sourceUrl": f"https://github.com/{repo}",
               "rootRequired": False,
@@ -172,7 +178,7 @@ jobs:
           **Install:** \`org.csweb.tv_${VERSION}_arm.ipk\` with Developer Mode (\`ares-install\`) or the kit's \`tools/install.sh\`.
           SHA-256: \`$sha\`
 
-          The app ships no plugins and no content: it runs CloudStream extensions from repositories you add.
+          The generic app package ships no plugins. The INNO-Hit package includes the pinned StreamingCommunity, AnimeUnity and AnimeWorld bundle; its source revision and hashes are attached as `plugins-manifest.json`.
 
           **Built with**
           - Native App Kit \`$kit\`
@@ -188,7 +194,7 @@ jobs:
             echo
             echo "**INNO-Hit 55 package built in this release run:** \`org.csweb.tv.legacy_${VERSION}_arm.ipk\`, SHA-256 \`$legacy_sha\`."
             echo "Targets IH55UWB; IH55UWB4 and all TV behavior remain unverified. The package passed CI checks but has not been tested on an INNO-Hit TV."
-            echo "It uses an armv7 plugin runtime and bundled libcurl. No third-party plugins are included in public releases because their redistribution terms are not verified."
+            echo "It uses an armv7 plugin runtime and bundled libcurl. The selected community plugins remain separate third-party works; provenance and hashes are attached."
           } >> notes.md
           cat notes.md
 
@@ -204,4 +210,4 @@ jobs:
             --notes-file notes.md \
             "dist/org.csweb.tv_${VERSION}_arm.ipk" dist/org.csweb.tv.manifest.json dist/SHA256SUMS \
             "dist-legacy/org.csweb.tv.legacy_${VERSION}_arm.ipk" \
-            dist-legacy/org.csweb.tv.legacy.manifest.json dist-legacy/SHA256SUMS-legacy
+            dist-legacy/org.csweb.tv.legacy.manifest.json dist-legacy/plugins-manifest.json dist-legacy/SHA256SUMS-legacy

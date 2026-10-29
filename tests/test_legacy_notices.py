@@ -1,11 +1,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Notice generation must follow the shipped ARMv7 files and exact source identities."""
 import hashlib
+import io
 import importlib.util
 import json
 import pathlib
 import os
 import subprocess
+import tarfile
 import tempfile
 import textwrap
 import unittest
@@ -143,33 +145,71 @@ class LegacyReleaseGateTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stdout.strip(), expected)
 
-    def test_release_requires_a_built_package_and_its_notices(self):
+    def test_release_requires_package_notices_and_plugin_provenance(self):
         workflow = (ROOT / ".github/workflows/release.yml").read_text()
         step = workflow.split("      - name: Verify the INNO-Hit IPK and write its manifest\n", 1)[1]
         script = textwrap.dedent(step.split("        run: |\n", 1)[1].split("      - name:", 1)[0])
-        for package, notices in ((False, False), (True, False), (True, True)):
-            with self.subTest(package=package, notices=notices), tempfile.TemporaryDirectory() as directory:
+        script = script.replace(
+            "python3 tools/verify-innohit-plugin-ipk.py",
+            f"python3 {ROOT / 'tools/verify-innohit-plugin-ipk.py'}",
+        )
+        for package, notices, provenance in (
+                (False, False, False), (True, False, False), (True, True, False), (True, True, True)):
+            with self.subTest(package=package, notices=notices, provenance=provenance), \
+                    tempfile.TemporaryDirectory() as directory:
                 root = pathlib.Path(directory)
                 ipk = root / "dist-legacy/org.csweb.tv.legacy_9.8.7_arm.ipk"
                 if package:
-                    ipk.parent.mkdir()
-                    ipk.write_bytes(b"release-step-test-fixture")
+                    ipk.parent.mkdir(parents=True)
+                    payloads = {
+                        name: f"fixture-bytes-{name}".encode()
+                        for name in ("StreamingCommunity", "AnimeUnity", "AnimeWorld")
+                    }
+                    data_archive = root / "data.tar.gz"
+                    with tarfile.open(data_archive, "w:gz") as archive:
+                        for name, payload in payloads.items():
+                            member = tarfile.TarInfo(
+                                f"./usr/palm/applications/org.csweb.tv/bundled-plugins/{name}.cs3"
+                            )
+                            member.size = len(payload)
+                            archive.addfile(member, io.BytesIO(payload))
+                    (root / "debian-binary").write_text("2.0\n")
+                    subprocess.run(
+                        ["ar", "rc", str(ipk), "debian-binary", "data.tar.gz"],
+                        cwd=root, check=True, capture_output=True,
+                    )
                 if notices:
                     table = root / "runtime/licenses-armv7/packages.tsv"
                     table.parent.mkdir(parents=True)
                     table.write_text("# fixture for workflow gate test\n")
+                if provenance:
+                    plugins = [
+                        {"internalName": name, "file": f"{name}.cs3", "sha256": hashlib.sha256(
+                            f"fixture-bytes-{name}".encode()).hexdigest(),
+                         "size": len(f"fixture-bytes-{name}".encode())}
+                        for name in ("StreamingCommunity", "AnimeUnity", "AnimeWorld")
+                    ]
+                    (root / "dist-legacy/plugins-manifest.json").write_text(json.dumps({
+                        "schemaVersion": 1,
+                        "sourceRef": "ce3e8e4eee533a6b03ccd17426edadf5ac88bc06",
+                        "plugins": plugins,
+                    }))
                 env = dict(os.environ, VERSION="9.8.7",
                            GITHUB_REPOSITORY="sostk/cloudstream-webos-native", GITHUB_SHA="a" * 40)
                 result = subprocess.run(["bash", "-e", "-o", "pipefail", "-c", script], cwd=root,
                                         env=env, capture_output=True, text=True, timeout=15)
-                self.assertEqual(result.returncode == 0, package and notices, result.stdout + result.stderr)
+                expected_success = package and notices and provenance
+                self.assertEqual(result.returncode == 0, expected_success, result.stdout + result.stderr)
                 manifest = root / "dist-legacy/org.csweb.tv.legacy.manifest.json"
-                self.assertEqual(manifest.exists(), package and notices)
-                if package and notices:
+                self.assertEqual(manifest.exists(), expected_success)
+                checksums = root / "dist-legacy/SHA256SUMS-legacy"
+                self.assertEqual(checksums.exists(), expected_success)
+                if expected_success:
                     data = json.loads(manifest.read_text())
                     self.assertEqual(data["id"], "org.csweb.tv.legacy")
                     self.assertEqual(data["version"], "9.8.7")
                     self.assertEqual(data["ipkHash"]["sha256"], hashlib.sha256(ipk.read_bytes()).hexdigest())
+                    self.assertIn("plugins-manifest.json", checksums.read_text())
 
 
 if __name__ == "__main__":

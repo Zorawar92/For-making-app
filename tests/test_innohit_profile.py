@@ -11,8 +11,8 @@ class InnoHitProfileTest(unittest.TestCase):
         self.assertIn('option(CSWEB_INNOHIT_55', cmake)
         self.assertIn('set(CSWEB_LEGACY ON CACHE BOOL', cmake)
         self.assertIn('set(CSWEB_TITLE "CloudStream Hub - INNO-Hit 55")', cmake)
-        self.assertIn('set(CSWEB_VERSION 0.6.3 CACHE STRING', cmake)
-        self.assertIn('VERSION="${CSWEB_VERSION:-0.6.3}"', (ROOT / "tools/build-innohit-55.sh").read_text())
+        self.assertIn('set(CSWEB_VERSION 0.6.4 CACHE STRING', cmake)
+        self.assertIn('VERSION="${CSWEB_VERSION:-0.6.4}"', (ROOT / "tools/build-innohit-55.sh").read_text())
         self.assertIn('#define CSWEB_WINDOW_TITLE "CloudStream Hub - INNO-Hit 55"', main)
 
     def test_targeted_build_and_ci_use_the_profile(self):
@@ -22,7 +22,7 @@ class InnoHitProfileTest(unittest.TestCase):
         self.assertIn('-DCSWEB_INNOHIT_55=ON', workflow)
         self.assertIn('name: innohit-55-webos-hub-ipk', workflow)
 
-    def test_tv_profile_does_not_preinstall_third_party_plugins(self):
+    def test_tv_profile_has_no_hard_coded_plugin_repository(self):
         app = (ROOT / "apps/csweb-tv/src/app/application.cpp").read_text()
         self.assertNotIn('doGiorsHadEnough', app)
 
@@ -50,8 +50,13 @@ class InnoHitProfileTest(unittest.TestCase):
         self.assertIn("github.event.workflow_run.id", automatic_release)
         self.assertNotIn('name: org.csweb.tv-ipk', automatic_release)
         self.assertIn("[release-innohit]", automatic_release)
+        self.assertIn("[build-innohit]", automatic_release)
         self.assertIn("[build-innohit-plugins]", automatic_release)
-        self.assertIn("not in message", automatic_release)
+        self.assertIn("plugins-manifest.json", automatic_release)
+        self.assertIn("verify-innohit-plugin-ipk.py", automatic_release)
+        self.assertIn("bundle_plugins: true", manual_release)
+        self.assertIn("verify-innohit-plugin-ipk.py", manual_release)
+        self.assertIn("plugins-manifest.json", manual_release)
         self.assertIn('gh release create "v$VERSION"', automatic_release)
         self.assertIn('not an older artifact', automatic_release)
         self.assertNotIn('workflow_dispatch:', automatic_release)
