@@ -1,14 +1,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Runs host tests on pull requests and pushes. Expensive runtime/webOS package jobs run for a manual package run,
-# a release workflow_call, or an explicitly marked push commit ([build-innohit]); the personal plugin bundle
-# is included only when that push also contains [build-innohit-plugins].
+# Runs host tests on pull requests and pushes. Target-specific package jobs run for manual/workflow_call
+# builds or explicit push markers: [build-webos] for generic ARM64, [build-innohit] for legacy ARMv7.
+# The personal plugin bundle is included only when an INNO-Hit test push also contains
+# [build-innohit-plugins]. Legacy jobs may fail softly on ordinary builds, but are required for releases.
 #   host:  kit + apps built for Linux (host-debug and host-asan), all tests (kit, apps, project tools)
-#   runtime: the plugin runtime (runtime-aarch64) from the pinned inputs (tools/build-runtime.sh),
-#            cached until runtime/ or its inputs change
-#   webos: the full TV package (org.csweb.tv ipk with that runtime), checked by the kit's check-package
+#   runtime/webos: the generic ARM64 runtime and package (org.csweb.tv), requested with [build-webos]
+#            or included in manual/reusable release builds
 #   runtime-legacy, webos-legacy: the legacy package for TVs with a 32-bit kernel (org.csweb.tv.legacy:
 #            runtime-armv7 and a bundled libcurl, docs/legacy-build.md). Separate jobs, caches and artifacts;
-#            allowed to fail, so they never hold back the jobs above.
+#            optional on ordinary builds, required for workflow_call and [release-innohit] builds.
 # The kit is checked out at the commit tools/fetch-kit.sh pins. Main build tests use this project's
 # own fixtures. The isolated legacy-runtime-test job additionally loads fixed third-party revisions.
 name: CI
@@ -110,7 +110,7 @@ jobs:
 
   runtime:
     name: Plugin runtime (aarch64)
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[build-innohit]')) }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[build-webos]')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
@@ -151,6 +151,7 @@ jobs:
 
   webos:
     name: webOS package
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[build-webos]')) }}
     needs: runtime
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -210,7 +211,7 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[build-innohit]')) }}
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 120
-    continue-on-error: true
+    continue-on-error: ${{ github.event_name != 'workflow_call' && !contains(github.event.head_commit.message, '[release-innohit]') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -272,7 +273,7 @@ jobs:
     needs: art-legacy
     runs-on: ubuntu-24.04
     timeout-minutes: 150
-    continue-on-error: true
+    continue-on-error: ${{ github.event_name != 'workflow_call' && !contains(github.event.head_commit.message, '[release-innohit]') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -321,7 +322,7 @@ jobs:
     needs: runtime-legacy
     runs-on: ubuntu-24.04
     timeout-minutes: 60
-    continue-on-error: true
+    continue-on-error: ${{ github.event_name != 'workflow_call' && !contains(github.event.head_commit.message, '[release-innohit]') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -402,7 +403,7 @@ jobs:
     needs: runtime-legacy
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 15
-    continue-on-error: true
+    continue-on-error: ${{ github.event_name != 'workflow_call' && !contains(github.event.head_commit.message, '[release-innohit]') }}
     steps:
       - uses: actions/checkout@v4
         with:

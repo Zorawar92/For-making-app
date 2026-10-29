@@ -26,15 +26,30 @@ class InnoHitProfileTest(unittest.TestCase):
         app = (ROOT / "apps/csweb-tv/src/app/application.cpp").read_text()
         self.assertNotIn('doGiorsHadEnough', app)
 
-    def test_release_attaches_prebuilt_innohit_package_without_building_on_each_push(self):
+    def test_release_uses_only_the_latest_successful_same_run_ipk(self):
         ci = (ROOT / ".github/workflows/ci.yml").read_text()
-        release = (ROOT / ".github/workflows/release.yml").read_text()
-        publish = (ROOT / ".github/workflows/publish-prebuilt-ipk.yml").read_text()
-        self.assertIn("github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call'", ci)
-        self.assertIn('name: innohit-55-webos-hub-ipk', release)
-        self.assertIn('name: innohit-55-webos-hub-ipk', publish)
-        self.assertIn('run-id:', publish)
-        self.assertIn('gh release create', publish)
+        manual_release = (ROOT / ".github/workflows/release.yml").read_text()
+        automatic_release = (ROOT / ".github/workflows/publish-prebuilt-ipk.yml").read_text()
+
+        self.assertIn("'[release-innohit]'", ci)
+        required_for_release = (
+            "continue-on-error: ${{ github.event_name != 'workflow_call' && "
+            "!contains(github.event.head_commit.message, '[release-innohit]') }}"
+        )
+        self.assertEqual(ci.count(required_for_release), 4)
+        self.assertIn('name: innohit-55-webos-hub-ipk', manual_release)
+        self.assertIn('expected exactly one INNO-Hit IPK', manual_release)
+        self.assertIn('workflows: [CI]', automatic_release)
+        self.assertIn('types: [completed]', automatic_release)
+        self.assertIn("github.event.workflow_run.id", automatic_release)
+        self.assertNotIn('name: org.csweb.tv-ipk', automatic_release)
+        self.assertIn("[release-innohit]", automatic_release)
+        self.assertIn("[build-innohit-plugins]", automatic_release)
+        self.assertIn("not in message", automatic_release)
+        self.assertIn('gh release create "v$VERSION"', automatic_release)
+        self.assertIn('not an older artifact', automatic_release)
+        self.assertNotIn('workflow_dispatch:', automatic_release)
+
 
 
 if __name__ == "__main__":

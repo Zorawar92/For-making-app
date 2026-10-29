@@ -143,15 +143,13 @@ class LegacyReleaseGateTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stdout.strip(), expected)
 
-    def test_actual_release_step_only_publishes_a_built_package_with_notices(self):
+    def test_release_requires_a_built_package_and_its_notices(self):
         workflow = (ROOT / ".github/workflows/release.yml").read_text()
-        step = workflow.split("      - name: Legacy package and its manifest\n", 1)[1]
+        step = workflow.split("      - name: Verify the INNO-Hit IPK and write its manifest\n", 1)[1]
         script = textwrap.dedent(step.split("        run: |\n", 1)[1].split("      - name:", 1)[0])
         for package, notices in ((False, False), (True, False), (True, True)):
             with self.subTest(package=package, notices=notices), tempfile.TemporaryDirectory() as directory:
                 root = pathlib.Path(directory)
-                output = root / "outputs"
-                output.write_text("")
                 ipk = root / "dist-legacy/org.csweb.tv.legacy_9.8.7_arm.ipk"
                 if package:
                     ipk.parent.mkdir()
@@ -160,14 +158,13 @@ class LegacyReleaseGateTest(unittest.TestCase):
                     table = root / "runtime/licenses-armv7/packages.tsv"
                     table.parent.mkdir(parents=True)
                     table.write_text("# fixture for workflow gate test\n")
-                env = dict(os.environ, VERSION="9.8.7", GITHUB_OUTPUT=str(output),
+                env = dict(os.environ, VERSION="9.8.7",
                            GITHUB_REPOSITORY="sostk/cloudstream-webos-native", GITHUB_SHA="a" * 40)
                 result = subprocess.run(["bash", "-e", "-o", "pipefail", "-c", script], cwd=root,
                                         env=env, capture_output=True, text=True, timeout=15)
-                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(result.returncode == 0, package and notices, result.stdout + result.stderr)
                 manifest = root / "dist-legacy/org.csweb.tv.legacy.manifest.json"
                 self.assertEqual(manifest.exists(), package and notices)
-                self.assertEqual("files=" in output.read_text(), package and notices)
                 if package and notices:
                     data = json.loads(manifest.read_text())
                     self.assertEqual(data["id"], "org.csweb.tv.legacy")

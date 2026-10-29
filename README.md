@@ -16,13 +16,15 @@ Il percorso completo richiede Linux, Docker, il webOS NDK e tempo/spazio per com
 tools/build-innohit-55.sh
 ```
 
-Il target package è `org.csweb.tv.legacy` versione candidata **0.6.3**; il titolo visualizzato nell'app è **CloudStream Hub - INNO-Hit 55**. Il file IPK viene creato sotto `external/webos-native-app-kit/build/webos-innohit55/dist/`. Il build locale include per default StreamingCommunity, AnimeUnity e AnimeWorld, già installati e abilitati al primo avvio:
+Il target package è `org.csweb.tv.legacy` versione candidata **0.6.3**; il titolo visualizzato nell'app è **CloudStream Hub - INNO-Hit 55**. Il file IPK viene creato sotto `external/webos-native-app-kit/build/webos-innohit55/dist/`. Il build locale include per default StreamingCommunity, AnimeUnity e AnimeWorld, già installati e abilitati al primo avvio. Lo script scarica i tre `.cs3` dalla revisione doGior fissata nel tool, ne verifica hash e formato e li passa al package builder. I file restano nell'area locale di build e non vengono aggiunti a Git. Per un build locale senza plugin, imposta `CSWEB_BUNDLE_DOGIOR_PLUGINS=0`.
 
-```sh
-tools/build-innohit-55.sh
-```
+Il CI include i `.cs3` soltanto nei build personali esplicitamente marcati `[build-innohit-plugins]`; i package destinati a Release pubbliche non li includono finché i permessi di redistribuzione non sono verificati. Se l'app trova già una versione di uno di questi plugin nello storage TV, non la sovrascrive. La prova CI ARMv7 ha caricato e registrato i tre provider in un runtime isolato/offline: non dimostra ricerca via rete, playback o compatibilità con webOS Hub. I job Legacy sono facoltativi nei build ordinari; quando il commit richiede una release, diventano obbligatori e un errore blocca la pubblicazione.
 
-Lo script scarica i tre `.cs3` dalla revisione doGior fissata nel tool, ne verifica hash e formato e li passa al package builder. I file restano nell'area locale di build e non vengono aggiunti a Git. Per un build locale senza plugin, imposta `CSWEB_BUNDLE_DOGIOR_PLUGINS=0`. Il job CI crea l'IPK con plugin solo per un commit di test che contiene il marker `[build-innohit-plugins]`; gli altri build CI e le Release pubbliche restano senza gli archivi plugin. Se l'app trova già una versione di uno di questi plugin nello storage TV, non la sovrascrive. Il primo avvio importa i plugin senza richiedere la rete; questo dimostra solo il packaging/import, non che il runtime parta né che provider e playback siano compatibili con webOS Hub. I job Legacy sono sperimentali e possono fallire senza bloccare i test host.
+### Release GitHub
+
+Un commit su `main` che contiene entrambi i marker `[build-innohit]` e `[release-innohit]` avvia i job ARMv7/webOS per il profilo INNO-Hit; al termine, il workflow **Release latest INNO-Hit IPK** pubblica una pre-release `v<versione>` usando l'IPK prodotto dalla stessa run CI. Controlla il nome/versione del package e gli avvisi runtime, calcola SHA-256 e non recupera artifact da run precedenti. La release si ferma se la run CI o il package non passano i controlli. Il package generico ARM64 si compila separatamente con `[build-webos]`; l'azione manuale **Actions → Release** ricostruisce e pubblica entrambi i profili. Per le Release pubbliche INNO-Hit sono intenzionalmente esclusi i `.cs3` finché la licenza upstream non autorizza chiaramente la redistribuzione.
+
+È disponibile anche **Actions → Release** per una pubblicazione manuale da `main`: inserisci la versione, e il workflow ricostruisce e testa i package prima di creare la release. Non allega un IPK storico o un bundle plugin personale.
 
 ### Repo doGior e compatibilità
 
@@ -37,7 +39,7 @@ Il bundle personale citato sopra fissa una revisione doGior e verifica l'integri
 - **Modello confermato:** INNO-Hit IH55UWB; firmware 04.56.35; il menu TV riporta webOS Hub 7.5.8.
 - **Altro modello target:** IH55UWB4, non ancora confermato dall'utente e non testato.
 - **Osservazione riportata dall'utente:** CSWeb TV 0.6.0 si avvia su IH55UWB, ma i plugin non funzionano. Non sono ancora noti variante IPK, plugin provato, stadio del guasto o log.
-- **Verifica del nostro profilo INNO-Hit:** non ancora eseguita. L'IPK che supera `check-package` non equivale a una prova sulla TV.
+- **Verifica CI del profilo INNO-Hit:** il runtime ARMv7 ha caricato e registrato StreamingCommunity, AnimeUnity e AnimeWorld in test isolati/offline e il package 0.6.3 ha superato il controllo IPK; non equivale a una prova sulla TV.
 - La variante ARMv7 è un profilo prudenziale, non una conclusione ricavata dal numero di versione. Kernel ABI, API webOS Hub, librerie grafiche/media e policy d'installazione vanno verificati sulla TV.
 
 Dopo l'installazione raccogli log e risultati per **entrambe** le sigle, se possibile. Segui la matrice in [docs/roadmap.md](docs/roadmap.md) e la guida upstream [compatibilità](docs/compatibility.md).

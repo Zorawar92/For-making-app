@@ -1,110 +1,146 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Publish an already-built INNO-Hit IPK without rebuilding it.
-name: Publish prebuilt INNO-Hit IPK
+# Publish the INNO-Hit IPK produced by the successful main-branch CI run that explicitly requested a release.
+# The artifact is selected by this workflow_run event's run ID; no commit-message run IDs/tags or stale
+# artifacts are accepted. Public plugin redistribution is intentionally disabled until licences are verified.
+name: Release latest INNO-Hit IPK
 
 on:
-  push:
-    branches: ['arena/**']
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
 
 permissions:
   actions: read
   contents: write
 
+concurrency:
+  group: publish-innohit-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
 jobs:
   publish:
-    if: startsWith(github.event.head_commit.message, '[publish-prebuilt-ipk]')
-    name: Attach the existing IPK to a prerelease
+    name: Publish this CI run's INNO-Hit IPK
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      contains(github.event.workflow_run.head_commit.message, '[release-innohit]')
     runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RUN_ID: ${{ github.event.workflow_run.id }}
+      SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
-      - name: Read source run and release tag from the commit message
-        id: meta
-        env:
-          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+      - name: Verify source run and release request
         run: |
-          python3 - <<'PY' >> "$GITHUB_OUTPUT"
-          import os, re
-          message = os.environ["COMMIT_MESSAGE"]
-          run_id = re.search(r"\brun=(\d+)\b", message)
-          tag = re.search(r"\btag=([A-Za-z0-9._-]+)\b", message)
-          if not run_id or not tag:
-              raise SystemExit("commit message must include run=<id> and tag=<tag>")
-          print(f"run_id={run_id.group(1)}")
-          print(f"tag={tag.group(1)}")
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" > "$RUNNER_TEMP/source-run.json"
+          python3 - "$RUNNER_TEMP/source-run.json" "$RUN_ID" "$SOURCE_SHA" <<'PY'
+          import json, sys
+          data_path, run_id, source_sha = sys.argv[1:]
+          with open(data_path) as source:
+              run = json.load(source)
+          assert str(run["id"]) == run_id
+          assert run["name"] == "CI", run.get("name")
+          assert run["event"] == "push", run["event"]
+          assert run["head_branch"] == "main", run["head_branch"]
+          assert run["head_sha"] == source_sha, (run["head_sha"], source_sha)
+          assert run["conclusion"] == "success", run["conclusion"]
+          message = run.get("head_commit", {}).get("message", "")
+          assert "[release-innohit]" in message, "missing explicit release marker"
+          assert "[build-innohit]" in message, "release marker must request a fresh legacy package build"
+          assert "[build-innohit-plugins]" not in message, (
+              "public release blocked: plugin bundle requested without verified redistribution terms"
+          )
+          print(f"Verified successful CI run {run_id} for {source_sha}; no plugin bundle requested.")
           PY
 
-      - name: Verify the source build
-        id: source
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ steps.meta.outputs.run_id }}
-        run: |
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" > /tmp/source-run.json
-          python3 - <<'PY' >> "$GITHUB_OUTPUT"
-          import json, os
-          run = json.load(open("/tmp/source-run.json"))
-          if run.get("status") != "completed" or run.get("conclusion") != "success":
-              raise SystemExit("source CI run must be completed successfully")
-          if run.get("repository", {}).get("full_name", "").lower() not in ("", os.environ["GITHUB_REPOSITORY"].lower()):
-              raise SystemExit("source run belongs to a different repository")
-          print(f"source_sha={run['head_sha']}")
-          print(f"source_branch={run['head_branch']}")
-          PY
-
-      - name: Download the existing INNO-Hit package artifact
+      - name: Download the INNO-Hit package from this exact CI run
         uses: actions/download-artifact@v4
         with:
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
           name: innohit-55-webos-hub-ipk
-          path: dist
-          run-id: ${{ steps.meta.outputs.run_id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: dist-legacy
 
-      - name: Check package and write checksum
+      - name: Verify package version and create checksum and manifest
         id: package
         run: |
-          mapfile -t ipks < <(find dist -type f -name '*.ipk' -print)
+          mapfile -t ipks < <(find dist-legacy -maxdepth 1 -type f -name '*.ipk' -print)
           if [[ "${#ipks[@]}" -ne 1 ]]; then
-            echo "::error::expected one IPK in the selected CI artifact; found ${#ipks[@]}"
-            find dist -maxdepth 3 -type f -print
+            echo "::error::expected exactly one INNO-Hit IPK from CI run $RUN_ID"
+            find dist-legacy -maxdepth 2 -type f -print
             exit 1
           fi
-          ipk="${ipks[0]}"
-          name=$(basename "$ipk")
-          if [[ ! "$name" =~ ^org\.csweb\.tv\.legacy_([0-9]+\.[0-9]+\.[0-9]+)_arm\.ipk$ ]]; then
-            echo "::error::unexpected IPK filename: $name"
+          ipk="$(basename "${ipks[0]}")"
+          if [[ "$ipk" =~ ^org\.csweb\.tv\.legacy_([0-9]+\.[0-9]+\.[0-9]+)_arm\.ipk$ ]]; then
+            version="${BASH_REMATCH[1]}"
+          else
+            echo "::error::unexpected INNO-Hit IPK name: $ipk"
             exit 1
           fi
-          version="${BASH_REMATCH[1]}"
-          (cd "$(dirname "$ipk")" && sha256sum "$name" > SHA256SUMS)
-          echo "ipk=$ipk" >> "$GITHUB_OUTPUT"
+          test -s runtime/licenses-armv7/packages.tsv || {
+            echo "::error::missing armv7 runtime license inventory; refusing to publish the IPK"
+            exit 1
+          }
+          (cd dist-legacy && sha256sum "$ipk" > SHA256SUMS)
+          python3 - "$version" "$ipk" <<'PY'
+          import hashlib, json, os, pathlib, sys
+          version, ipk = sys.argv[1:]
+          repo = os.environ["GITHUB_REPOSITORY"]
+          sha = os.environ["SOURCE_SHA"]
+          digest = hashlib.sha256(pathlib.Path(f"dist-legacy/{ipk}").read_bytes()).hexdigest()
+          manifest = {
+              "id": "org.csweb.tv.legacy",
+              "version": version,
+              "type": "native",
+              "title": "CloudStream Hub - INNO-Hit 55",
+              "appDescription": "Experimental native webOS build for INNO-Hit IH55UWB (IH55UWB4 not tested). "
+                                "No third-party repositories, plugins or content are preinstalled.",
+              "iconUri": f"https://raw.githubusercontent.com/{repo}/{sha}/apps/csweb-tv/packaging/icons/largeIcon.png",
+              "sourceUrl": f"https://github.com/{repo}",
+              "rootRequired": False,
+              "ipkUrl": ipk,
+              "ipkHash": {"sha256": digest},
+          }
+          pathlib.Path("dist-legacy/org.csweb.tv.legacy.manifest.json").write_text(
+              json.dumps(manifest, indent=1) + "\n"
+          )
+          pathlib.Path("version.txt").write_text(version + "\n")
+          print(json.dumps(manifest, indent=1))
+          PY
+          version=$(cat version.txt)
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v$version" >/dev/null 2>&1; then
+            echo "::error::tag v$version already exists; refusing to overwrite it"
+            exit 1
+          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - name: Create the pre-release with the existing package
+      - name: Write release notes
         env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.meta.outputs.tag }}
-          IPK: ${{ steps.package.outputs.ipk }}
           VERSION: ${{ steps.package.outputs.version }}
-          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
-          SOURCE_BRANCH: ${{ steps.source.outputs.source_branch }}
-          RUN_ID: ${{ steps.meta.outputs.run_id }}
         run: |
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "::error::release $TAG already exists; refusing to replace it"
-            exit 1
-          fi
-          sha_file="$(dirname "$IPK")/SHA256SUMS"
-          cat > release-notes.md <<EOF
-          **Experimental INNO-Hit 55 package, version $VERSION.**
+          sha=$(cut -d' ' -f1 dist-legacy/SHA256SUMS)
+          cat > notes.md <<EOF
+          CloudStream Hub $VERSION INNO-Hit package built and checked by CI from commit \`$SOURCE_SHA\` (run [#$RUN_ID](https://github.com/$GITHUB_REPOSITORY/actions/runs/$RUN_ID)).
 
-          IPK: \`$(basename "$IPK")\`
-          Built by successful GitHub Actions run [$RUN_ID](https://github.com/$GITHUB_REPOSITORY/actions/runs/$RUN_ID) from commit \`$SOURCE_SHA\` on \`$SOURCE_BRANCH\`.
+          **IPK:** \`org.csweb.tv.legacy_${VERSION}_arm.ipk\`
+          **SHA-256:** \`$sha\`
 
-          This release reuses that CI artifact; this workflow does **not** compile the IPK. The package passed the webOS package check but has not been installed or tested on an INNO-Hit TV. IH55UWB4 is unverified. No third-party repositories, plugins or content are preinstalled.
+          This is an experimental native webOS build for IH55UWB; IH55UWB4 and device behavior are not verified by CI. CI tests are offline and do not establish provider search, network access, playback, or TV compatibility.
+
+          No third-party \`.cs3\` plugins are included because their redistribution permissions have not been verified. This release uses the IPK from the exact successful CI run linked above, not an older artifact.
           EOF
-          gh release create "$TAG" "$IPK" "$sha_file" \
+
+      - name: Create pre-release with the exact CI artifact
+        env:
+          VERSION: ${{ steps.package.outputs.version }}
+        run: |
+          gh release create "v$VERSION" --prerelease --latest=false \
             --target "$SOURCE_SHA" \
-            --title "CloudStream Hub - INNO-Hit 55 $VERSION (candidate)" \
-            --notes-file release-notes.md \
-            --prerelease --latest=false
+            --title "CloudStream Hub $VERSION (candidate)" \
+            --notes-file notes.md \
+            "dist-legacy/org.csweb.tv.legacy_${VERSION}_arm.ipk" \
+            dist-legacy/org.csweb.tv.legacy.manifest.json dist-legacy/SHA256SUMS
