@@ -307,6 +307,7 @@ public final class CompatTest {
         File dir = Files.createTempDirectory("csweb-dns-prefs").toFile();
         HeadlessContext ctx = new HeadlessContext(dir, "com.lagradost.cloudstream3", 4);
         SharedPreferences p = ctx.getSharedPreferences("com.lagradost.cloudstream3_preferences", 0);
+        eq("CloudStream DNS resource key", "dns_key", ctx.getString(0x7f14014e));
         eq("AdGuard DNS preference seeded", 4, p.getInt("dns_key", 0));
         ctx.setDnsProvider(2);
         eq("Cloudflare DNS preference updated", 2, p.getInt("dns_key", 0));

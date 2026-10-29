@@ -12,6 +12,12 @@ import java.io.File;
  * and is expected to skip its UI, exactly as it would when CloudStream passes a non-Activity context.
  */
 public final class HeadlessContext extends Context {
+    // CloudStream's pinned APK in runtime/inputs.lock assigns this ID to R.string.dns_key, whose
+    // value is the SharedPreferences key "dns_key". RequestsHelperKt uses it before the plugin
+    // runtime is ready. The headless runtime has no Android app resource table, so provide this
+    // one bootstrap resource explicitly instead of failing in Resources.getSystem().
+    private static final int CLOUDSTREAM_DNS_KEY_RESOURCE = 0x7f14014e;
+
     private final File dataDir;
     private final String packageName;
 
@@ -34,6 +40,13 @@ public final class HeadlessContext extends Context {
     @Override public SharedPreferences getSharedPreferences(String name, int mode) {
         String safe = name == null ? "null" : name.replaceAll("[^A-Za-z0-9._-]", "_");
         return JsonSharedPreferences.open(new File(new File(dataDir, "shared_prefs"), safe + ".json"));
+    }
+
+    @Override public String getString(int resId) {
+        if ("com.lagradost.cloudstream3".equals(packageName) && resId == CLOUDSTREAM_DNS_KEY_RESOURCE) {
+            return "dns_key";
+        }
+        return super.getString(resId);
     }
 
     @Override public Context getApplicationContext() { return this; }
