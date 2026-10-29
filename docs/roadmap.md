@@ -1,6 +1,6 @@
 # Roadmap e gate di fattibilità
 
-Stato: l'utente ha installato l'IPK candidato 0.6.1 e conferma che l'app si avvia su IH55UWB. La grafica non coincide con CloudStream Android e la repo doGior/plugin non ha ancora funzionato. L'IPK con i bundle locali selezionati è in sviluppo e non è ancora testato sulla TV.
+Stato: l'utente ha installato un IPK precedente e conferma che l'app si avvia su IH55UWB, ma la grafica non coincide con CloudStream Android e i plugin non sono ancora stati verificati sulla TV. La release pubblica `v0.6.3` è plugin-free; le modifiche per `0.6.4` aggiungono il bundle pin StreamingCommunity, AnimeUnity e AnimeWorld alle release INNO-Hit e sono in corso.
 
 ## Target generico della famiglia 55″
 
@@ -26,11 +26,11 @@ Il profilo CMake `CSWEB_INNOHIT_55=ON` produce un singolo IPK con runtime ARMv7 
 
 - Configurare l'NDK webOS e compilare con `tools/build-innohit-55.sh`.
 - Verificare l'IPK con `check-package` e annotare commit/hash dell'output.
-- Non distribuire l'IPK finché gli avvisi runtime in `runtime/licenses-armv7/` e le licenze dei componenti sono verificati.
+- Per ogni release verificare gli avvisi runtime in `runtime/licenses-armv7/`, i checksum del package e il manifest di provenienza dei plugin inclusi.
 
 ## Gate 2 — bundle doGior, provider e playback
 
-- Build personale: includere per default StreamingCommunity, AnimeUnity e AnimeWorld pre-scaricati, verificarne hash e importarli/abilitarli al primo avvio. Il build CI richiede il marker `[build-innohit-plugins]`. I file `.cs3` non sono committati e non entrano nelle Release pubbliche.
+- Build locale e release INNO-Hit: includere StreamingCommunity, AnimeUnity e AnimeWorld dalla revisione fissata, verificarne hash e importarli/abilitarli al primo avvio. La CI richiede `[build-innohit-plugins]` nei push di release e allega `plugins-manifest.json`; i `.cs3` non sono committati. Inclusione e redistribuzione sono state richieste dal maintainer; ciò non equivale a un test sulla TV.
 - Provare i tre plugin singolarmente sulla IH55UWB: caricamento, ricerca, dettagli, estrazione link e riproduzione sono gate distinti; raccogliere errore e log del runtime.
 - Rendere note le limitazioni dei plugin che richiedono WebView, UI Android/AndroidX, DRM o servizi non disponibili.
 - La UI nativa webOS è stata confermata avviabile ma non visivamente equivalente a CloudStream Android; raccogliere screenshot prima di pianificare le modifiche grafiche.

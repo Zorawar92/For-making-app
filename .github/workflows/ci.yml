@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Runs host tests on pull requests and pushes. Target-specific package jobs run for manual/workflow_call
 # builds or explicit push markers: [build-webos] for generic ARM64, [build-innohit] for legacy ARMv7.
-# The personal plugin bundle is included only when an INNO-Hit test push also contains
-# [build-innohit-plugins]. Legacy jobs may fail softly on ordinary builds, but are required for releases.
+# The selected community plugin bundle is enabled by [build-innohit-plugins] on pushes or by
+# bundle_plugins on workflow_call. Provenance is staged beside the IPK for public release assets.
 #   host:  kit + apps built for Linux (host-debug and host-asan), all tests (kit, apps, project tools)
 #   runtime/webos: the generic ARM64 runtime and package (org.csweb.tv), requested with [build-webos]
 #            or included in manual/reusable release builds
@@ -27,6 +27,10 @@ on:
         description: App version for the package (x.y.z); empty keeps the one in apps/csweb-tv/CMakeLists.txt
         type: string
         default: ''
+      bundle_plugins:
+        description: Include the pinned community plugin bundle in the INNO-Hit package
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -364,8 +368,8 @@ jobs:
           path: ~/.cache/wnk/libcurl
           key: libcurl-sources-${{ hashFiles('tools/build-libcurl-webos.sh') }}
 
-      - name: Prepare selected plugins for a personal test IPK
-        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[build-innohit-plugins]') }}
+      - name: Prepare the pinned community plugin bundle
+        if: ${{ (github.event_name == 'push' && contains(github.event.head_commit.message, '[build-innohit-plugins]')) || (github.event_name == 'workflow_call' && inputs.bundle_plugins) }}
         run: |
           log="$RUNNER_TEMP/plugin-fetch.log"
           if python3 tools/fetch-dogior-plugins.py --out "$RUNNER_TEMP/bundled-plugins" >"$log" 2>&1; then
@@ -381,7 +385,7 @@ jobs:
         working-directory: ${{ env.KIT }}
         env:
           VERSION: ${{ inputs.version }}
-          BUNDLE_PLUGINS: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[build-innohit-plugins]') }}
+          BUNDLE_PLUGINS: ${{ (github.event_name == 'push' && contains(github.event.head_commit.message, '[build-innohit-plugins]')) || (github.event_name == 'workflow_call' && inputs.bundle_plugins) }}
         run: |
           plugin_arg=()
           if [[ "$BUNDLE_PLUGINS" == "true" ]]; then
@@ -395,11 +399,27 @@ jobs:
         working-directory: ${{ env.KIT }}
         run: cmake --build build/webos-legacy -j"$(nproc)" --target csweb-tv-ipk
 
-      - name: Upload the package
+      - name: Stage the IPK and plugin provenance
+        env:
+          BUNDLE_PLUGINS: ${{ (github.event_name == 'push' && contains(github.event.head_commit.message, '[build-innohit-plugins]')) || (github.event_name == 'workflow_call' && inputs.bundle_plugins) }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/innohit-release-assets"
+          mapfile -t packages < <(find "$GITHUB_WORKSPACE/$KIT/build/webos-legacy/dist" -maxdepth 1 -type f -name 'org.csweb.tv.legacy_*_arm.ipk' -print)
+          [[ "${#packages[@]}" -eq 1 ]] || { echo "::error::expected one INNO-Hit IPK"; exit 1; }
+          cp "${packages[0]}" "$RUNNER_TEMP/innohit-release-assets/"
+          if [[ "$BUNDLE_PLUGINS" == "true" ]]; then
+            test -s "$RUNNER_TEMP/bundled-plugins/manifest.json"
+            python3 "$GITHUB_WORKSPACE/tools/verify-innohit-plugin-ipk.py" \
+              --ipk "${packages[0]}" --manifest "$RUNNER_TEMP/bundled-plugins/manifest.json"
+            cp "$RUNNER_TEMP/bundled-plugins/manifest.json" "$RUNNER_TEMP/innohit-release-assets/plugins-manifest.json"
+          fi
+
+      - name: Upload the package and provenance
         uses: actions/upload-artifact@v4
         with:
           name: innohit-55-webos-hub-ipk
-          path: ${{ env.KIT }}/build/webos-legacy/dist/org.csweb.tv.legacy_*_arm.ipk
+          path: ${{ runner.temp }}/innohit-release-assets/*
+          if-no-files-found: error
           retention-days: 14
 
   legacy-runtime-test:

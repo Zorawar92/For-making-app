@@ -11,7 +11,7 @@ A non-commercial licence for the whole app would require a rights review and per
 ## Third-party code, data, and plugins
 
 - Keep each dependency's copyright notices, licence text, source-offer obligations, and package notices. The app's licence does not replace them.
-- Plugin archives are separate works. A pinned version and matching SHA-256 establish which bytes were fetched; they do **not** establish a redistribution licence. In particular, the selected StreamingCommunity, AnimeUnity, and AnimeWorld archives must not be bundled into a public release until the exact source and licence permission for each selected archive are verified. See the provenance notes in the repository history and `README.md`.
+- Plugin archives are separate third-party works and are not relicensed by this repository. At the maintainer's explicit direction, public INNO-Hit releases include the selected StreamingCommunity, AnimeUnity, and AnimeWorld archives; the maintainer confirms they are open source and redistributable. The release pins their source revision and publishes `plugins-manifest.json` with versions, sizes, and SHA-256 hashes. This manifest records provenance and integrity, not a substitute licence or a certification that the plugins work on a particular TV. Each work retains its own authorship and applicable terms.
 - Stream URLs, media, subtitles, and add-on content are not relicensed by this repository.
 
 ## Stremio interoperability

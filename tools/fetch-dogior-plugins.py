@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Fetch the selected doGior .cs3 plugins into a private, local IPK build directory.
+"""Fetch the selected community .cs3 plugins into a staged IPK build directory.
 
-The plugin binaries are not checked into this repository and are not added to public releases.
-The build ref is pinned so the downloaded bytes and hashes are reproducible.
+Plugin binaries stay out of Git. The staged manifest records the pinned source ref, versions,
+file sizes and SHA-256 hashes and accompanies the INNO-Hit IPK in the release workflow.
 """
 
 from __future__ import annotations
@@ -124,7 +124,7 @@ def collect_plugins() -> tuple[dict, list[tuple[dict, bytes]]]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out", required=True, type=Path, help="private package input directory (basename must be bundled-plugins)")
+    parser.add_argument("--out", required=True, type=Path, help="package input directory (basename must be bundled-plugins)")
     args = parser.parse_args()
     if args.out.name != "bundled-plugins":
         parser.error("--out must end in a directory named bundled-plugins")
@@ -157,7 +157,7 @@ def main() -> int:
         return 1
 
     print(f"Prepared {len(packaged)} doGior plugins in {args.out} (source ref {BUILD_REF}).")
-    print("These files are local build inputs; they are not part of the public Git repository or release workflow.")
+    print("Plugin bytes remain out of Git; manifest.json records source commit and hashes for IPK provenance.")
     return 0
 
 
