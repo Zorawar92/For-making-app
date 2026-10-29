@@ -29,14 +29,30 @@ class DogiorBundleTest(unittest.TestCase):
             archive.writestr("classes.dex", b"dex")
         BUNDLE.validate_cs3(data.getvalue(), "example.cs3")
 
-    def test_bundle_is_personal_build_opt_in(self):
+    def test_personal_build_bundles_plugins_by_default(self):
         cmake = (ROOT / "apps/csweb-tv/CMakeLists.txt").read_text()
         build = (ROOT / "tools/build-innohit-55.sh").read_text()
         manager = (ROOT / "apps/csweb-tv/src/plugins/plugin_manager.cpp").read_text()
         self.assertIn("CSWEB_BUNDLED_PLUGINS_DIR", cmake)
-        self.assertIn("CSWEB_BUNDLE_DOGIOR_PLUGINS", build)
+        base_dirs = cmake.index('set(_csweb_extra_dirs "${_csweb_fonts}" "${_csweb_icons}" "${_csweb_brand}")')
+        bundled_dir = cmake.index('list(APPEND _csweb_extra_dirs "${CSWEB_BUNDLED_PLUGINS_DIR}")')
+        package = cmake.index("wnk_add_webos_package(")
+        self.assertLess(base_dirs, bundled_dir)
+        self.assertLess(bundled_dir, package)
+        self.assertIn('CSWEB_BUNDLE_DOGIOR_PLUGINS:-1', build)
+        self.assertIn("CSWEB_BUNDLE_DOGIOR_PLUGINS must be 0 or 1", build)
         self.assertIn("read_store_with_bundled_plugins", manager)
         self.assertIn("do not overwrite a user's installed or updated version", manager)
+
+    def test_ci_bundles_plugins_only_for_explicit_personal_test_marker(self):
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+        self.assertIn("[build-innohit-plugins]", workflow)
+        self.assertIn("CSWEB_BUNDLED_PLUGINS_DIR", workflow)
+        self.assertIn("/plugins/StreamingCommunity.cs3 /plugins/AnimeUnity.cs3 /plugins/AnimeWorld.cs3", workflow)
+        self.assertIn("GITHUB_STEP_SUMMARY", workflow)
+        self.assertIn("Summarize plugin-load result", workflow)
+        self.assertIn("runtime tail:", workflow)
+        self.assertIn("Selected plugin fetch failed", workflow)
 
     def test_invalid_archive_is_rejected(self):
         with self.assertRaises(RuntimeError):
