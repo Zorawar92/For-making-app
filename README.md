@@ -28,6 +28,8 @@ Lo script scarica i tre `.cs3` dalla revisione doGior fissata nel tool, ne verif
 
 Il manifest doGior è `https://raw.githubusercontent.com/doGior/doGiorsHadEnough/refs/heads/builds/repo.json`; punta a `plugins.json`, che a sua volta elenca i `.cs3`, le versioni e gli hash. L'app legge questo formato CloudStream e carica i plugin con il runtime ART locale. Un `.cs3` è bytecode Android, non un eseguibile webOS: la registrazione del provider, la ricerca e la riproduzione sono verifiche separate e alcune API Android (per esempio WebView/UI Android o DRM) possono non essere supportate.
 
+Le richieste dei plugin girano nel runtime locale sulla TV; quelle del client dell'app passano dal trasporto HTTP nativo webOS. Non sono richieste `fetch` di una pagina browser, quindi CORS non è il limite e non serve un bridge su un altro dispositivo. DNS, TLS, blocchi anti-bot/Cloudflare e cambiamenti dei siti possono comunque impedire una richiesta o l'estrazione di un link.
+
 Il bundle personale citato sopra fissa una revisione doGior e verifica l'integrità dei file, ma **non certifica che quei plugin funzionino sulla TV**. I `.cs3` non sono redistribuiti nelle Release pubbliche del progetto.
 
 ## Compatibilità: cosa sappiamo e cosa no

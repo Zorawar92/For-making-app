@@ -425,17 +425,15 @@ jobs:
           docker run --rm --platform linux/arm/v7 --user "$(id -u):$(id -g)" \
             csweb-legacy-test python3 -c 'import os, pwd; print(pwd.getpwuid(os.getuid()).pw_name)'
 
-      - name: Fetch fixed plugin revisions and record provenance
+      - name: Fetch selected CloudStream plugins and record provenance
         run: |
-          curl -fSL --retry 3 -o /tmp/legacy-repro/plugins/BilibiliProvider.cs3 \
-            https://raw.githubusercontent.com/NivinCNC/CNCVerse-Cloud-Stream-Extension/947a28fefc8fb79c2067323a5701b7c2d4e5cfa8/BilibiliProvider.cs3
-          curl -fSL --retry 3 -o /tmp/legacy-repro/plugins/NguonC.cs3 \
-            https://raw.githubusercontent.com/h0dev/0cs3/1db6f185b9bab8627d83df22a087c661efe7a5d8/NguonC.cs3
+          python3 tools/fetch-dogior-plugins.py --out /tmp/legacy-repro/plugins/bundled-plugins
+          cp /tmp/legacy-repro/plugins/bundled-plugins/*.cs3 /tmp/legacy-repro/plugins/
           sha256sum /tmp/legacy-repro/plugins/*.cs3 > /tmp/legacy-repro/logs/plugin-sha256.txt
           uname -a > /tmp/legacy-repro/logs/host-kernel.txt
           sha256sum runtime-armv7.tar > /tmp/legacy-repro/logs/runtime-sha256.txt
 
-      - name: Load unmodified plugins in the ARMv7 runtime
+      - name: Load selected plugins in the ARMv7 runtime
         run: |
           docker run --rm --platform linux/arm/v7 --network none --user "$(id -u):$(id -g)" --cap-drop ALL \
             --security-opt no-new-privileges --pids-limit 256 --memory 1g \
@@ -444,7 +442,37 @@ jobs:
             -v /tmp/legacy-repro/logs:/logs \
             -v "$GITHUB_WORKSPACE/tools/test-legacy-runtime.py":/test.py:ro \
             csweb-legacy-test python3 /test.py --runtime /runtime --output /logs --probes \
-            /plugins/BilibiliProvider.cs3 /plugins/NguonC.cs3
+            /plugins/StreamingCommunity.cs3 /plugins/AnimeUnity.cs3 /plugins/AnimeWorld.cs3
+
+      - name: Summarize plugin-load result
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib
+          out = pathlib.Path('/tmp/legacy-repro/logs')
+          summaries = sorted(out.glob('*.summary.json')) if out.exists() else []
+          if not summaries:
+              print('::error title=Plugin runtime diagnostics::No plugin summary was produced')
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
+                  f.write('Plugin runtime test produced no summary.\n')
+              raise SystemExit(0)
+          rows = []
+          for path in summaries:
+              d = json.loads(path.read_text())
+              providers = ', '.join(d.get('providers', [])) or '(none)'
+              result = 'PASS' if d.get('ok') else 'FAIL'
+              rows.append((path.stem, result, str(d.get('ready')), str(d.get('loaded')), providers,
+                           str(d.get('timed_out')), str(d.get('probes_ok'))))
+              if not d.get('ok'):
+                  print('::error title=Plugin runtime load::' + path.stem + ': ready=' + str(d.get('ready')) +
+                        ', loaded=' + str(d.get('loaded')) + ', providers=' + providers +
+                        ', timed_out=' + str(d.get('timed_out')) + ', probes_ok=' + str(d.get('probes_ok')))
+          lines = ['| Plugin | Result | Ready | Loaded | Providers | Timeout | Probes |',
+                   '|---|---:|---:|---:|---|---:|---:|']
+          lines += ['| ' + ' | '.join(row) + ' |' for row in rows]
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
+              f.write('## Selected plugin ARMv7 runtime test\n\n' + '\n'.join(lines) + '\n')
+          PY
 
       - name: Keep plugin-load results and progress logs
         if: always()
