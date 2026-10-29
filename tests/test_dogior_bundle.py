@@ -51,6 +51,8 @@ class DogiorBundleTest(unittest.TestCase):
         self.assertIn("/plugins/StreamingCommunity.cs3 /plugins/AnimeUnity.cs3 /plugins/AnimeWorld.cs3", workflow)
         self.assertIn("GITHUB_STEP_SUMMARY", workflow)
         self.assertIn("Summarize plugin-load result", workflow)
+        self.assertIn("runtime tail:", workflow)
+        self.assertIn("Selected plugin fetch failed", workflow)
 
     def test_invalid_archive_is_rejected(self):
         with self.assertRaises(RuntimeError):

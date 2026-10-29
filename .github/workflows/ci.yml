@@ -361,7 +361,16 @@ jobs:
 
       - name: Prepare selected plugins for a personal test IPK
         if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[build-innohit-plugins]') }}
-        run: python3 tools/fetch-dogior-plugins.py --out "$RUNNER_TEMP/bundled-plugins"
+        run: |
+          log="$RUNNER_TEMP/plugin-fetch.log"
+          if python3 tools/fetch-dogior-plugins.py --out "$RUNNER_TEMP/bundled-plugins" >"$log" 2>&1; then
+            cat "$log"
+          else
+            cat "$log"
+            detail=$(tr '\n' ' ' < "$log")
+            echo "::error title=Selected plugin fetch failed::$detail"
+            exit 1
+          fi
 
       - name: Configure
         working-directory: ${{ env.KIT }}
@@ -461,12 +470,17 @@ jobs:
               d = json.loads(path.read_text())
               providers = ', '.join(d.get('providers', [])) or '(none)'
               result = 'PASS' if d.get('ok') else 'FAIL'
-              rows.append((path.stem, result, str(d.get('ready')), str(d.get('loaded')), providers,
+              plugin = path.name.removesuffix('.summary.json')
+              rows.append((plugin, result, str(d.get('ready')), str(d.get('loaded')), providers,
                            str(d.get('timed_out')), str(d.get('probes_ok'))))
               if not d.get('ok'):
-                  print('::error title=Plugin runtime load::' + path.stem + ': ready=' + str(d.get('ready')) +
-                        ', loaded=' + str(d.get('loaded')) + ', providers=' + providers +
-                        ', timed_out=' + str(d.get('timed_out')) + ', probes_ok=' + str(d.get('probes_ok')))
+                  runtime_log = out / (plugin + '.runtime.log')
+                  tail = runtime_log.read_text(errors='replace').splitlines()[-12:] if runtime_log.exists() else []
+                  detail = ' | '.join(line.strip() for line in tail)
+                  message = (plugin + ': ready=' + str(d.get('ready')) + ', loaded=' + str(d.get('loaded')) +
+                             ', providers=' + providers + ', timed_out=' + str(d.get('timed_out')) +
+                             ', probes_ok=' + str(d.get('probes_ok')) + '; runtime tail: ' + detail)
+                  print('::error title=Plugin runtime load::' + message[:3500])
           lines = ['| Plugin | Result | Ready | Loaded | Providers | Timeout | Probes |',
                    '|---|---:|---:|---:|---|---:|---:|']
           lines += ['| ' + ' | '.join(row) + ' |' for row in rows]
