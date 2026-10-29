@@ -6,7 +6,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 KIT="$ROOT/external/webos-native-app-kit"
 BUILD_DIR="${CSWEB_BUILD_DIR:-$KIT/build/webos-innohit55}"
-VERSION="${CSWEB_VERSION:-0.6.2}"
+VERSION="${CSWEB_VERSION:-0.6.3}"
 JOBS="${JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}"
 
 if [[ -z "${WEBOS_NDK:-}" ]]; then
@@ -21,7 +21,12 @@ if [[ ! -x "$ROOT/runtime/dist/runtime-armv7/lib/ld-musl-armhf.so.1" ]]; then
 fi
 
 BUNDLE_DIR=""
-if [[ "${CSWEB_BUNDLE_DOGIOR_PLUGINS:-0}" == "1" ]]; then
+BUNDLE_PLUGINS="${CSWEB_BUNDLE_DOGIOR_PLUGINS:-1}"
+if [[ "$BUNDLE_PLUGINS" != "0" && "$BUNDLE_PLUGINS" != "1" ]]; then
+    echo "CSWEB_BUNDLE_DOGIOR_PLUGINS must be 0 or 1." >&2
+    exit 2
+fi
+if [[ "$BUNDLE_PLUGINS" == "1" ]]; then
     python3 "$ROOT/tools/fetch-dogior-plugins.py" --out "$BUILD_DIR/bundled-plugins"
     BUNDLE_DIR="$BUILD_DIR/bundled-plugins"
 fi

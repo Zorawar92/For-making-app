@@ -30,7 +30,7 @@ Il profilo CMake `CSWEB_INNOHIT_55=ON` produce un singolo IPK con runtime ARMv7 
 
 ## Gate 2 — bundle doGior, provider e playback
 
-- Build personale opt-in: includere StreamingCommunity, AnimeUnity e AnimeWorld pre-scaricati, verificarne hash e importarli/abilitarli al primo avvio. I file `.cs3` non sono committati e non entrano nelle Release pubbliche.
+- Build personale: includere per default StreamingCommunity, AnimeUnity e AnimeWorld pre-scaricati, verificarne hash e importarli/abilitarli al primo avvio. Il build CI richiede il marker `[build-innohit-plugins]`. I file `.cs3` non sono committati e non entrano nelle Release pubbliche.
 - Provare i tre plugin singolarmente sulla IH55UWB: caricamento, ricerca, dettagli, estrazione link e riproduzione sono gate distinti; raccogliere errore e log del runtime.
 - Rendere note le limitazioni dei plugin che richiedono WebView, UI Android/AndroidX, DRM o servizi non disponibili.
 - La UI nativa webOS è stata confermata avviabile ma non visivamente equivalente a CloudStream Android; raccogliere screenshot prima di pianificare le modifiche grafiche.

@@ -16,13 +16,13 @@ Il percorso completo richiede Linux, Docker, il webOS NDK e tempo/spazio per com
 tools/build-innohit-55.sh
 ```
 
-Il target package è `org.csweb.tv.legacy` versione candidata **0.6.2**; il titolo visualizzato nell'app è **CloudStream Hub - INNO-Hit 55**. Il file IPK viene creato sotto `external/webos-native-app-kit/build/webos-innohit55/dist/`. L'IPK pubblicato normalmente non contiene plugin di terze parti. Per un IPK personale aggiornabile (**0.6.3**) con StreamingCommunity, AnimeUnity e AnimeWorld già installati e abilitati al primo avvio, opt-in:
+Il target package è `org.csweb.tv.legacy` versione candidata **0.6.3**; il titolo visualizzato nell'app è **CloudStream Hub - INNO-Hit 55**. Il file IPK viene creato sotto `external/webos-native-app-kit/build/webos-innohit55/dist/`. Il build locale include per default StreamingCommunity, AnimeUnity e AnimeWorld, già installati e abilitati al primo avvio:
 
 ```sh
-CSWEB_VERSION=0.6.2 CSWEB_BUNDLE_DOGIOR_PLUGINS=1 tools/build-innohit-55.sh
+tools/build-innohit-55.sh
 ```
 
-Lo script scarica i tre `.cs3` dalla revisione doGior fissata nel tool, ne verifica hash e formato e li passa al package builder. I file restano nell'area locale di build e non vengono aggiunti a Git né alla Release pubblica. Se l'app trova già una versione di uno di questi plugin nello storage TV, non la sovrascrive. Il primo avvio importa i plugin senza richiedere la rete; la loro compatibilità funzionale con webOS Hub resta da verificare singolarmente. I job Legacy sono sperimentali e possono fallire senza bloccare i test host.
+Lo script scarica i tre `.cs3` dalla revisione doGior fissata nel tool, ne verifica hash e formato e li passa al package builder. I file restano nell'area locale di build e non vengono aggiunti a Git. Per un build locale senza plugin, imposta `CSWEB_BUNDLE_DOGIOR_PLUGINS=0`. Il job CI crea l'IPK con plugin solo per un commit di test che contiene il marker `[build-innohit-plugins]`; gli altri build CI e le Release pubbliche restano senza gli archivi plugin. Se l'app trova già una versione di uno di questi plugin nello storage TV, non la sovrascrive. Il primo avvio importa i plugin senza richiedere la rete; questo dimostra solo il packaging/import, non che il runtime parta né che provider e playback siano compatibili con webOS Hub. I job Legacy sono sperimentali e possono fallire senza bloccare i test host.
 
 ### Repo doGior e compatibilità
 
