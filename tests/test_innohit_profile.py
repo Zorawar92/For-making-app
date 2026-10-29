@@ -26,7 +26,7 @@ class InnoHitProfileTest(unittest.TestCase):
         app = (ROOT / "apps/csweb-tv/src/app/application.cpp").read_text()
         self.assertNotIn('doGiorsHadEnough', app)
 
-    def test_release_uses_only_the_latest_successful_same_run_ipks(self):
+    def test_release_uses_only_the_latest_successful_same_run_ipk(self):
         ci = (ROOT / ".github/workflows/ci.yml").read_text()
         manual_release = (ROOT / ".github/workflows/release.yml").read_text()
         automatic_release = (ROOT / ".github/workflows/publish-prebuilt-ipk.yml").read_text()
@@ -42,6 +42,7 @@ class InnoHitProfileTest(unittest.TestCase):
         self.assertIn('workflows: [CI]', automatic_release)
         self.assertIn('types: [completed]', automatic_release)
         self.assertIn("github.event.workflow_run.id", automatic_release)
+        self.assertNotIn('name: org.csweb.tv-ipk', automatic_release)
         self.assertIn("[release-innohit]", automatic_release)
         self.assertIn("[build-innohit-plugins]", automatic_release)
         self.assertIn("not in message", automatic_release)
