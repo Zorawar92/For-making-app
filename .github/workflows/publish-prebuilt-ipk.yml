@@ -1,7 +1,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Publish the INNO-Hit IPK produced by the successful main-branch CI run that explicitly requested a release.
 # The artifact is selected by this workflow_run event's run ID; no commit-message run IDs/tags or stale
-# artifacts are accepted. Public plugin redistribution is intentionally disabled until licences are verified.
+# artifacts are accepted.
+#
+# Redistribution note: doGior does not declare a licence for its .cs3 plugins, so public releases ship
+# without them by default. The owner has approved bundling StreamingCommunity (and the other pinned
+# doGior plugins) into the personal/experimental INNO-Hit IPK built here, for the device owner's own
+# use only. Such a build is published as a pre-release and is never marked "latest".
 name: Release latest INNO-Hit IPK
 
 on:
@@ -51,10 +56,10 @@ jobs:
           message = run.get("head_commit", {}).get("message", "")
           assert "[release-innohit]" in message, "missing explicit release marker"
           assert "[build-innohit]" in message, "release marker must request a fresh legacy package build"
-          assert "[build-innohit-plugins]" not in message, (
-              "public release blocked: plugin bundle requested without verified redistribution terms"
-          )
-          print(f"Verified successful CI run {run_id} for {source_sha}; no plugin bundle requested.")
+          # The owner has approved bundling the pinned doGior plugins (StreamingCommunity and others)
+          # into this personal/experimental INNO-Hit IPK. See the file header for the redistribution note.
+          bundled = "[build-innohit-plugins]" in message
+          print(f"Verified successful CI run {run_id} for {source_sha}; plugin bundle requested: {bundled}")
           PY
 
       - name: Download the INNO-Hit package from this exact CI run
@@ -98,7 +103,8 @@ jobs:
               "type": "native",
               "title": "CloudStream Hub - INNO-Hit 55",
               "appDescription": "Experimental native webOS build for INNO-Hit IH55UWB (IH55UWB4 not tested). "
-                                "No third-party repositories, plugins or content are preinstalled.",
+                                "Ships the pinned doGior plugins (StreamingCommunity and others) bundled for the "
+                                "device owner's personal use; no other content is preinstalled.",
               "iconUri": f"https://raw.githubusercontent.com/{repo}/{sha}/apps/csweb-tv/packaging/icons/largeIcon.png",
               "sourceUrl": f"https://github.com/{repo}",
               "rootRequired": False,
@@ -131,7 +137,7 @@ jobs:
 
           This is an experimental native webOS build for IH55UWB; IH55UWB4 and device behavior are not verified by CI. CI tests are offline and do not establish provider search, network access, playback, or TV compatibility.
 
-          No third-party \`.cs3\` plugins are included because their redistribution permissions have not been verified. This release uses the IPK from the exact successful CI run linked above, not an older artifact.
+          This build bundles the pinned doGior plugins (StreamingCommunity, AnimeUnity, AnimeWorld) inside the IPK for the device owner's personal use, per the owner's decision. doGior does not declare a licence for these \`.cs3\` files, so they are not part of the public source tree or of ordinary public releases. This pre-release uses the IPK from the exact successful CI run linked above, not an older artifact.
           EOF
 
       - name: Create pre-release with the exact CI artifact

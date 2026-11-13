@@ -175,7 +175,11 @@ void Application::on_start(wnk::app::Context &ctx) {
     services_.plugin_data = plugin_data_.get();
 
     runtime_->on_ready = [this] { plugins_->on_runtime_ready(); };
-    runtime_->on_state = [this](runtime::RuntimeClient::State) {
+    runtime_->on_state = [this, &ctx](runtime::RuntimeClient::State s) {
+        if (s == runtime::RuntimeClient::State::Failed) {
+            // Surface the runtime log path so a failure on the TV can be captured and reported.
+            ctx.ui().toast("Runtime plugin non avviato: /tmp/org.csweb.tv.legacy/runtime.log", 8000);
+        }
         services_.runtime_changed.emit();
         services_.plugins_changed.emit();  // Home shows a runtime failure
     };

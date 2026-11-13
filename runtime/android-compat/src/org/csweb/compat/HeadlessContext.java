@@ -46,7 +46,15 @@ public final class HeadlessContext extends Context {
         if ("com.lagradost.cloudstream3".equals(packageName) && resId == CLOUDSTREAM_DNS_KEY_RESOURCE) {
             return "dns_key";
         }
-        return super.getString(resId);
+        // The headless runtime has no Android application resource table, so any other resource lookup
+        // would raise Resources.NotFoundException and abort plugin init. Return an empty string as a
+        // pragmatic stand-in (the same approach used for dns_key) so plugins that read their own
+        // strings while loading do not crash the runtime. Framework/system strings still resolve.
+        try {
+            return super.getString(resId);
+        } catch (android.content.res.Resources.NotFoundException e) {
+            return "";
+        }
     }
 
     @Override public Context getApplicationContext() { return this; }
